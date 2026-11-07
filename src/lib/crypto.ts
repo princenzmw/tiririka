@@ -1,0 +1,166 @@
+/**
+ * Tiririka Cryptographic Engine
+ * Ed25519 Off-chain Payment Channel Voucher Generation & Local Kiosk Verification
+ * Uses tweetnacl and bs58 for sub-millisecond offline verification with zero RPC dependency.
+ */
+
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
+import { PaymentChannel, WaterVoucher, VerificationResult } from './types';
+
+/**
+ * Deterministic canonical serialization of a water payment voucher.
+ * Format: TIRIRIKA_V1:<channelId>:<nonce>:<cumulativeLitres>:<cumulativeLamports>
+ */
+export function serializeVoucherPayload(
+  channelId: string,
+  nonce: number,
+  cumulativeLitres: number,
+  cumulativeLamports: number
+): Uint8Array {
+  const canonicalString = `TIRIRIKA_V1:${channelId}:${nonce}:${cumulativeLitres.toFixed(2)}:${cumulativeLamports}`;
+  return new TextEncoder().encode(canonicalString);
+}
+
+/**
+ * Customer creates and cryptographically signs an incremental voucher off-chain.
+ * Generated every 0.1 litres without incurring on-chain transaction fees.
+ */
+export function signWaterVoucher(
+  channelId: string,
+  nonce: number,
+  cumulativeLitres: number,
+  cumulativeLamports: number,
+  customerSecretKey: Uint8Array,
+  customerPublicKeyBase58: string
+): WaterVoucher {
+  const messageBytes = serializeVoucherPayload(
+    channelId,
+    nonce,
+    cumulativeLitres,
+    cumulativeLamports
+  );
+
+  const signatureBytes = nacl.sign.detached(messageBytes, customerSecretKey);
+  const signatureBase58 = bs58.encode(signatureBytes);
+
+  return {
+    channelId,
+    nonce,
+    cumulativeLitres: Number(cumulativeLitres.toFixed(2)),
+    cumulativeLamports,
+    timestamp: Date.now(),
+    signature: signatureBase58,
+    customerPublicKey: customerPublicKeyBase58,
+  };
+}
+
+/**
+ * Kiosk locally verifies the voucher signature and state constraints.
+ * Runs 100% locally in memory (0 network latency, 0 RPC calls, works completely offline).
+ */
+export function verifyVoucherLocally(
+  voucher: WaterVoucher,
+  channel: PaymentChannel,
+  lastVerifiedNonce: number,
+  lastVerifiedLamports: number
+): VerificationResult {
+  // 1. Channel association check
+  if (voucher.channelId !== channel.id) {
+    return {
+      isValid: false,
+      reason: `Channel ID mismatch: expected ${channel.id}, got ${voucher.channelId}`,
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+
+  // 2. Customer identity check
+  if (voucher.customerPublicKey !== channel.customerPublicKey) {
+    return {
+      isValid: false,
+      reason: 'Voucher public key does not match channel creator',
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+
+  // 3. Monotonic nonce check (Replay Protection)
+  if (voucher.nonce <= lastVerifiedNonce) {
+    return {
+      isValid: false,
+      reason: `Stale or replayed nonce: ${voucher.nonce} <= last seen ${lastVerifiedNonce}`,
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+
+  // 4. Monotonic cumulative payment check
+  if (voucher.cumulativeLamports < lastVerifiedLamports) {
+    return {
+      isValid: false,
+      reason: `Payment amount decreased: ${voucher.cumulativeLamports} < ${lastVerifiedLamports}`,
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+
+  // 5. Deposit ceiling check (Solvency Protection)
+  if (voucher.cumulativeLamports > channel.depositLamports) {
+    return {
+      isValid: false,
+      reason: `Voucher exceeds channel deposit limit: ${voucher.cumulativeLamports} > ${channel.depositLamports}`,
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+
+  // 6. Cryptographic Ed25519 signature verification
+  try {
+    const messageBytes = serializeVoucherPayload(
+      voucher.channelId,
+      voucher.nonce,
+      voucher.cumulativeLitres,
+      voucher.cumulativeLamports
+    );
+
+    const signatureBytes = bs58.decode(voucher.signature);
+    const pubKeyBytes = bs58.decode(voucher.customerPublicKey);
+
+    const isSignatureValid = nacl.sign.detached.verify(
+      messageBytes,
+      signatureBytes,
+      pubKeyBytes
+    );
+
+    if (!isSignatureValid) {
+      return {
+        isValid: false,
+        reason: 'Cryptographic Ed25519 signature verification failed',
+        verifiedLitres: 0,
+        verifiedLamports: 0,
+        nonce: voucher.nonce,
+      };
+    }
+
+    return {
+      isValid: true,
+      verifiedLitres: voucher.cumulativeLitres,
+      verifiedLamports: voucher.cumulativeLamports,
+      nonce: voucher.nonce,
+    };
+  } catch (err) {
+    return {
+      isValid: false,
+      reason: `Signature decoding error: ${err instanceof Error ? err.message : String(err)}`,
+      verifiedLitres: 0,
+      verifiedLamports: 0,
+      nonce: voucher.nonce,
+    };
+  }
+}
