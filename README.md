@@ -99,25 +99,15 @@ npm test
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3300](http://localhost:3300) in your browser.
 
 ---
 
-## 6. Project Prize Track Eligibility
-
-| Prize Track | Eligibility Reason |
-| :--- | :--- |
-| **Top 3 Overall ($1,000 Microgrant)** | High-throughput, real-world physical utility demonstrating why Solana's speed and payment channels are mathematically necessary. |
-| **DeFi Track ($100 Gift Card)** | Non-custodial escrow, streaming micropayments, and automated unspent deposit refunds. |
-| **Best Beginner Hack ($100 Gift Card)** | First-time solo builder shipping a complete end-to-end Solana dApp with verifiable Devnet transactions. |
-
----
-
-## 7. Mandatory Hackathon Transparency & Disclosures
+## 6. Hackathon Transparency & Disclosures
 
 * **Event:** MLH Solana Hackathon (November 6–8, 2026).
 * **Builder:** Prince NZAMUWE ([@princenzmw](https://github.com/princenzmw)) — 3rd-year BSc Data Science student, Mastercard Foundation Scholar at USIU-Africa, Nairobi, Kenya.
-* **AI Tool Disclosure:** In accordance with MLH competition rules, Cursor and Claude Opus / Gemini AI coding assistants were utilized for scaffolding, TypeScript types, and unit test generation. All system design, cryptographic verification flows, and domain research are the original work of the author.
+* **AI Tool Disclosure:** In accordance with MLH competition rules, Cursor and Gemini AI coding assistants (Antigravity) were utilized for scaffolding, TypeScript types, and unit test generation. All system design, cryptographic verification flows, and domain research are the original work of the author.
 
 ---
 

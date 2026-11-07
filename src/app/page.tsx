@@ -32,18 +32,8 @@ import { Keypair } from '@solana/web3.js';
 export default function TiririkaKioskApp() {
   // Keypairs initialized on client mount
   const [customerKeypair, setCustomerKeypair] = useState<Keypair | null>(null);
-  const [operatorKeypair, setOperatorKeypair] = useState<Keypair | null>(null);
+  const [operatorPublicKeyBase58] = useState<string>(TIRIRIKA_CONFIG.DEFAULT_OPERATOR_PUBLIC_KEY);
   const [channelEscrowKeypair, setChannelEscrowKeypair] = useState<Keypair | null>(null);
-
-  useEffect(() => {
-    // Client-side keypair initialization inside animation frame avoids SSR prerender crypto errors and cascading renders
-    const frameId = requestAnimationFrame(() => {
-      setCustomerKeypair(generateDemoKeypair());
-      setOperatorKeypair(generateDemoKeypair());
-      setChannelEscrowKeypair(generateDemoKeypair());
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, []);
 
   // Balances
   const [customerBalanceSol, setCustomerBalanceSol] = useState<number>(0.05);
@@ -73,13 +63,25 @@ export default function TiririkaKioskApp() {
 
   // Update balances
   const refreshBalances = useCallback(async () => {
-    if (customerKeypair && operatorKeypair) {
+    if (customerKeypair) {
       const custBal = await getDevnetBalance(customerKeypair.publicKey.toBase58());
-      const opBal = await getDevnetBalance(operatorKeypair.publicKey.toBase58());
+      const opBal = await getDevnetBalance(operatorPublicKeyBase58);
       if (custBal > 0) setCustomerBalanceSol(custBal);
       if (opBal > 0) setOperatorBalanceSol(opBal);
     }
-  }, [customerKeypair, operatorKeypair]);
+  }, [customerKeypair, operatorPublicKeyBase58]);
+
+  useEffect(() => {
+    // Client-side keypair initialization inside animation frame avoids SSR prerender crypto errors and cascading renders
+    const frameId = requestAnimationFrame(() => {
+      setCustomerKeypair(generateDemoKeypair());
+      setChannelEscrowKeypair(generateDemoKeypair());
+      setTimeout(() => {
+        refreshBalances();
+      }, 500);
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [refreshBalances]);
 
   // Handle Devnet Airdrop
   const handleAirdrop = async () => {
@@ -99,7 +101,7 @@ export default function TiririkaKioskApp() {
 
   // Open Payment Channel
   const handleOpenChannel = async () => {
-    if (!customerKeypair || !operatorKeypair || !channelEscrowKeypair) return;
+    if (!customerKeypair || !channelEscrowKeypair) return;
     setIsOpeningChannel(true);
     setSecurityAlert(null);
     setSettlementResult(null);
@@ -109,7 +111,7 @@ export default function TiririkaKioskApp() {
     try {
       const newChannel = await openOnChainChannel(
         customerKeypair,
-        operatorKeypair.publicKey.toBase58(),
+        operatorPublicKeyBase58,
         depositLamports,
         channelEscrowKeypair
       );
@@ -120,7 +122,7 @@ export default function TiririkaKioskApp() {
       const fallbackChannel: PaymentChannel = {
         id: channelEscrowKeypair.publicKey.toBase58(),
         customerPublicKey: customerKeypair.publicKey.toBase58(),
-        kioskOperatorPublicKey: operatorKeypair.publicKey.toBase58(),
+        kioskOperatorPublicKey: operatorPublicKeyBase58,
         depositLamports,
         depositTxSignature: '4xZ7K9DevnetChannelDepositConfirmed8888888888888888888888888',
         createdAt: Date.now(),
@@ -658,7 +660,7 @@ export default function TiririkaKioskApp() {
 
           {/* Kiosk Pane Footer */}
           <div className="pt-4 mt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex justify-between items-center font-mono">
-            <span>Location: {TIRIRIKA_CONFIG.DEFAULT_LOCATION}</span>
+            <span>Operator: {operatorPublicKeyBase58.slice(0, 4)}...{operatorPublicKeyBase58.slice(-4)} • Mathare #107</span>
             <span className="flex items-center gap-1 text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" />
               Ed25519 Local Verification Active

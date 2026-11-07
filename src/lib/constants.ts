@@ -26,7 +26,8 @@ export const TIRIRIKA_CONFIG = {
   COMMITMENT: 'confirmed' as const,
   EXPLORER_BASE_URL: 'https://explorer.solana.com',
 
-  // Kiosk Default Demo Operator
+  // Kiosk Operator & Location
+  DEFAULT_OPERATOR_PUBLIC_KEY: '2wYHsuCApQqVwxKv6Hi8YcueqF8pMVTRrweSAAQ3FVy2',
   DEFAULT_OPERATOR_NAME: 'Mathare 4A Smart Kiosk #107',
   DEFAULT_LOCATION: 'Mathare Valley, Nairobi, Kenya',
 };
