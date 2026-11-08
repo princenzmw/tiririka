@@ -7,7 +7,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { signWaterVoucher, verifyVoucherLocally } from '../src/lib/crypto';
+import {
+  signWaterVoucher,
+  verifyVoucherLocally,
+  simulateReplayAttack,
+  simulateSolvencyAttack,
+  simulateTamperingAttack,
+} from '../src/lib/crypto';
 import { simulateOverClaimAttempt } from '../src/lib/solana';
 import { PaymentChannel, WaterVoucher } from '../src/lib/types';
 import { TIRIRIKA_CONFIG } from '../src/lib/constants';
@@ -155,5 +161,31 @@ describe('Tiririka Payment Channel Security & Cryptography', () => {
     // Within limit check
     const honestResult = simulateOverClaimAttempt(mockChannel, validVoucher, 87954);
     assert.strictEqual(honestResult.rejected, false);
+  });
+
+  it('validates 3-vector security lab attacks (replay, solvency, tampering)', () => {
+    const voucher = signWaterVoucher(
+      mockChannel.id,
+      10,
+      1.0,
+      6420,
+      customerKeypair.secretKey,
+      customerPubkeyBase58
+    );
+
+    // 1. Replay attack
+    const replay = simulateReplayAttack(mockChannel, voucher, 15);
+    assert.strictEqual(replay.rejected, true);
+    assert.match(replay.error, /stale or replayed/i);
+
+    // 2. Solvency attack
+    const solvency = simulateSolvencyAttack(mockChannel, voucher);
+    assert.strictEqual(solvency.rejected, true);
+    assert.match(solvency.error, /exceeds channel deposit limit/i);
+
+    // 3. Tampering attack
+    const tampering = simulateTamperingAttack(mockChannel, voucher);
+    assert.strictEqual(tampering.rejected, true);
+    assert.match(tampering.error, /signature verification failed/i);
   });
 });

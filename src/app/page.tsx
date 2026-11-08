@@ -44,6 +44,8 @@ import JerrycanVisualizer from '@/components/JerrycanVisualizer';
 import VoucherInspectorModal from '@/components/VoucherInspectorModal';
 import JudgeTourBanner from '@/components/JudgeTourBanner';
 import ProtocolSpecsModal from '@/components/ProtocolSpecsModal';
+import SecurityLab from '@/components/SecurityLab';
+import HardwareTelemetry from '@/components/HardwareTelemetry';
 
 export default function TiririkaKioskApp() {
   // Keypairs initialized on client mount
@@ -82,6 +84,7 @@ export default function TiririkaKioskApp() {
   const [isAutoDemoRunning, setIsAutoDemoRunning] = useState<boolean>(false);
   const [showSpecsModal, setShowSpecsModal] = useState<boolean>(false);
   const [selectedVoucherForInspect, setSelectedVoucherForInspect] = useState<WaterVoucher | null>(null);
+  const [currencyMode, setCurrencyMode] = useState<'KES' | 'USD' | 'SOL'>('KES');
 
   // Real-Time Devnet Telemetry
   const [devnetSlot, setDevnetSlot] = useState<number>(312891420);
@@ -377,7 +380,7 @@ export default function TiririkaKioskApp() {
         operatorPayoutLamports: effectiveVoucher.cumulativeLamports,
         customerRefundLamports: Math.max(0, activeChannel.depositLamports - effectiveVoucher.cumulativeLamports),
         settlementTxSignature: '5SettledDevnetWaterPayoutAndRefund1111111111111111111111111',
-        explorerUrl: `${TIRIRIKA_CONFIG.EXPLORER_BASE_URL}/tx/5SettledDevnetWaterPayoutAndRefund1111111111111111111111111?cluster=devnet`,
+        explorerUrl: `${TIRIRIKA_CONFIG.EXPLORER_BASE_URL}/address/${activeChannel.kioskOperatorPublicKey}?cluster=devnet`,
       };
 
       setSettlementResult(simulatedSummary);
@@ -482,6 +485,7 @@ export default function TiririkaKioskApp() {
 
   // Calculated Metrics
   const costKes = (litresDispensed * TIRIRIKA_CONFIG.KES_PER_LITRE).toFixed(2);
+  const costUsd = (litresDispensed * 0.00115).toFixed(4); // KES 0.15/L ≈ $0.00115 USD
   const costSol = (verifiedLamports / 1_000_000_000).toFixed(6);
   const unspentRefundSol = channel
     ? Math.max(0, (channel.depositLamports - verifiedLamports) / 1_000_000_000).toFixed(6)
@@ -936,6 +940,16 @@ export default function TiririkaKioskApp() {
               <div className="text-right">
                 <div className="text-[11px] text-slate-400 font-mono uppercase tracking-wider">Operator Balance</div>
                 <div className="text-sm font-bold text-emerald-400 font-mono">{operatorBalanceSol.toFixed(4)} SOL</div>
+                <a
+                  href={`https://explorer.solana.com/address/${operatorPublicKeyBase58}?cluster=devnet`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center justify-end gap-1 font-mono cursor-pointer"
+                  title="View verified operator account on Solana Explorer"
+                >
+                  <span>{operatorPublicKeyBase58.slice(0, 4)}...{operatorPublicKeyBase58.slice(-4)}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
               </div>
             </div>
 
@@ -964,6 +978,51 @@ export default function TiririkaKioskApp() {
               </div>
             )}
 
+            {/* Currency Purchasing Power Switcher */}
+            <div className="flex items-center justify-between mb-3 bg-slate-950/80 p-2.5 rounded-2xl border border-slate-800 text-xs">
+              <span className="text-slate-400 font-mono text-[11px] flex items-center gap-1.5 font-semibold">
+                <span>Currency Display:</span>
+              </span>
+              <div className="flex gap-1 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setCurrencyMode('KES')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currencyMode === 'KES'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                  aria-label="Display prices in Kenyan Shillings"
+                >
+                  KES (KSh)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrencyMode('USD')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currencyMode === 'USD'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                  aria-label="Display prices in US Dollars"
+                >
+                  USD ($)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrencyMode('SOL')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currencyMode === 'SOL'
+                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                  aria-label="Display prices in Solana Lamports"
+                >
+                  SOL (Lamports)
+                </button>
+              </div>
+            </div>
+
             {/* Digital LED Flow Metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
               <div className="bg-slate-950/90 p-4 rounded-2xl border border-slate-800">
@@ -973,9 +1032,20 @@ export default function TiririkaKioskApp() {
               </div>
 
               <div className="bg-slate-950/90 p-4 rounded-2xl border border-slate-800">
-                <div className="text-[11px] text-slate-400 font-medium">Cost (KES / SOL)</div>
-                <div className="text-2xl font-extrabold font-mono text-white mt-1">KES {costKes}</div>
-                <div className="text-[10px] text-emerald-400 font-mono mt-0.5">{verifiedLamports.toLocaleString()} lamports</div>
+                <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between">
+                  <span>Cost ({currencyMode})</span>
+                  <span className="text-[9px] text-cyan-400 font-mono">
+                    {currencyMode === 'KES' ? 'KES 0.15/L' : currencyMode === 'USD' ? '$0.00115/L' : '6,420 lam/L'}
+                  </span>
+                </div>
+                <div className="text-2xl font-extrabold font-mono text-white mt-1">
+                  {currencyMode === 'KES' && `KES ${costKes}`}
+                  {currencyMode === 'USD' && `$${costUsd}`}
+                  {currencyMode === 'SOL' && `${costSol} SOL`}
+                </div>
+                <div className="text-[10px] text-emerald-400 font-mono mt-0.5 truncate">
+                  {currencyMode === 'SOL' ? `${verifiedLamports.toLocaleString()} lamports` : `≈ ${costSol} SOL`}
+                </div>
               </div>
 
               <div className="bg-slate-950/90 p-4 rounded-2xl border border-slate-800 col-span-2 sm:col-span-1">
@@ -995,6 +1065,15 @@ export default function TiririkaKioskApp() {
               jerrycanPercentage={jerrycanPercentage}
               isFlowing={isFlowing}
             />
+
+            {/* Embedded DePIN IoT Water ATM Hardware Telemetry */}
+            <div className="mb-5">
+              <HardwareTelemetry
+                isFlowing={isFlowing}
+                voucherCount={voucherCount}
+                litresDispensed={litresDispensed}
+              />
+            </div>
 
             {/* Settlement Summary Card (if settled) */}
             {settlementResult && (
@@ -1024,33 +1103,44 @@ export default function TiririkaKioskApp() {
                   className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center justify-center gap-1.5 pt-1.5 font-mono cursor-pointer font-semibold underline underline-offset-4"
                   aria-label="Verify settlement on Solana Explorer"
                 >
-                  <span>Verify Settlement Transaction on Solana Explorer</span>
+                  <span>
+                    {settlementResult.settlementTxSignature.startsWith('5SettledDevnet')
+                      ? 'Verify Operator Settlement Account on Solana Explorer'
+                      : 'Verify Settlement Transaction on Solana Explorer'}
+                  </span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             )}
 
-            {/* Anti-Cheat Demonstration Button */}
-            {channel && channel.status === 'OPEN' && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleSimulateAttack}
-                  className="w-full py-3.5 px-4 rounded-2xl text-xs font-bold bg-rose-950/60 border border-rose-700/80 hover:bg-rose-900 text-rose-200 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40"
-                  aria-label="Test Operator Over-Claim Attack Demo"
-                >
-                  <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>Test Operator Over-Claim Attack (Security Demo)</span>
-                </button>
-              </div>
-            )}
+            {/* Interactive 3-Vector Cryptographic Security Threat Lab */}
+            <div className="pt-1">
+              <SecurityLab
+                channel={channel}
+                lastVoucher={lastVoucher}
+                voucherCount={voucherCount}
+                onAttackTriggered={(res) => {
+                  audioSynth.playAttackAlert(soundEnabled);
+                  setSecurityAlert({
+                    type: 'attack',
+                    message: `${res.type} thwarted in ${res.executionMs}ms: ${res.message}`,
+                  });
+                }}
+              />
+            </div>
           </div>
 
           {/* Kiosk Pane Footer */}
           <div className="pt-4 mt-6 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center font-mono">
-            <span>
+            <a
+              href={`https://explorer.solana.com/address/${operatorPublicKeyBase58}?cluster=devnet`}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-cyan-400 transition-colors flex items-center gap-1 cursor-pointer"
+            >
               Operator: {operatorPublicKeyBase58.slice(0, 4)}...{operatorPublicKeyBase58.slice(-4)} • Mathare #107
-            </span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
             <span className="flex items-center gap-1 text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" />
               Ed25519 Local Verification Active

@@ -164,3 +164,81 @@ export function verifyVoucherLocally(
     };
   }
 }
+
+/**
+ * Simulates a Stale Nonce Replay Attack (Security Lab Test 1)
+ */
+export function simulateReplayAttack(
+  channel: PaymentChannel,
+  currentVoucher: WaterVoucher,
+  currentNonce: number
+): { rejected: boolean; attackType: string; error: string; executionMs: number } {
+  const start = performance.now();
+  const staleNonce = Math.max(1, currentNonce - 3);
+  const replayVoucher: WaterVoucher = {
+    ...currentVoucher,
+    nonce: staleNonce,
+  };
+
+  const result = verifyVoucherLocally(replayVoucher, channel, currentNonce, currentVoucher.cumulativeLamports);
+  const executionMs = Number((performance.now() - start).toFixed(2));
+
+  return {
+    rejected: !result.isValid,
+    attackType: 'Replay Attack (Stale Nonce)',
+    error: result.reason || 'Replay rejected',
+    executionMs,
+  };
+}
+
+/**
+ * Simulates an Escrow Solvency Breach Attack (Security Lab Test 2)
+ */
+export function simulateSolvencyAttack(
+  channel: PaymentChannel,
+  currentVoucher: WaterVoucher
+): { rejected: boolean; attackType: string; error: string; executionMs: number } {
+  const start = performance.now();
+  const excessiveLamports = channel.depositLamports * 5; // 5x deposit
+  const breachVoucher: WaterVoucher = {
+    ...currentVoucher,
+    nonce: currentVoucher.nonce + 1,
+    cumulativeLamports: excessiveLamports,
+  };
+
+  const result = verifyVoucherLocally(breachVoucher, channel, currentVoucher.nonce, currentVoucher.cumulativeLamports);
+  const executionMs = Number((performance.now() - start).toFixed(2));
+
+  return {
+    rejected: !result.isValid,
+    attackType: 'Solvency Breach (Over-Claim)',
+    error: result.reason || 'Solvency guard breached',
+    executionMs,
+  };
+}
+
+/**
+ * Simulates a Payload Tampering Attack (Security Lab Test 3)
+ */
+export function simulateTamperingAttack(
+  channel: PaymentChannel,
+  currentVoucher: WaterVoucher
+): { rejected: boolean; attackType: string; error: string; executionMs: number } {
+  const start = performance.now();
+  // Modify cumulative lamports without re-signing
+  const tamperedVoucher: WaterVoucher = {
+    ...currentVoucher,
+    nonce: currentVoucher.nonce + 1,
+    cumulativeLamports: currentVoucher.cumulativeLamports + 50000,
+  };
+
+  const result = verifyVoucherLocally(tamperedVoucher, channel, currentVoucher.nonce, currentVoucher.cumulativeLamports);
+  const executionMs = Number((performance.now() - start).toFixed(2));
+
+  return {
+    rejected: !result.isValid,
+    attackType: 'Payload Signature Tampering',
+    error: result.reason || 'Signature invalid for altered pre-image',
+    executionMs,
+  };
+}
