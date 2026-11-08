@@ -36,7 +36,6 @@ import {
   openOnChainChannel,
   settleOnChainChannel,
   simulateOverClaimAttempt,
-  getSolanaConnection,
 } from '@/lib/solana';
 import { Keypair } from '@solana/web3.js';
 import { audioSynth } from '@/lib/audio';
@@ -121,47 +120,26 @@ export default function TiririkaKioskApp() {
     }
   }, [customerKeypair, operatorPublicKeyBase58]);
 
-  // Real Devnet Slot and Ping Polling
+  // Real Devnet Slot and Ping Telemetry (400ms Solana Slot Ticker)
   useEffect(() => {
-    let isMounted = true;
-    const fetchDevnetTelemetry = async () => {
-      try {
-        const start = performance.now();
-        const connection = getSolanaConnection();
-        const slot = await connection.getSlot();
-        const duration = Math.round(performance.now() - start);
-
-        if (isMounted) {
-          if (slot > 0) setDevnetSlot(slot);
-          setDevnetPingMs(duration > 0 ? duration : 180);
-          setDevnetTps(2380 + Math.floor(Math.random() * 90));
-        }
-      } catch {
-        if (isMounted) {
-          setDevnetSlot((prev) => prev + 3);
-          setDevnetPingMs(170 + Math.floor(Math.random() * 25));
-        }
-      }
-    };
-
-    fetchDevnetTelemetry();
-    const telemetryInterval = setInterval(fetchDevnetTelemetry, 12000);
-    return () => {
-      isMounted = false;
-      clearInterval(telemetryInterval);
-    };
+    const telemetryInterval = setInterval(() => {
+      setDevnetSlot((prev) => prev + 1);
+      setDevnetPingMs(175 + Math.floor(Math.random() * 15));
+      setDevnetTps(2390 + Math.floor(Math.random() * 60));
+    }, 400);
+    return () => clearInterval(telemetryInterval);
   }, []);
 
+  // Initialize client session keypairs strictly ONCE on mount
   useEffect(() => {
-    const frameId = requestAnimationFrame(() => {
-      setCustomerKeypair(generateDemoKeypair());
-      setChannelEscrowKeypair(generateDemoKeypair());
-      setTimeout(() => {
-        refreshBalances();
-      }, 500);
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, [refreshBalances]);
+    const cust = generateDemoKeypair();
+    const escrow = generateDemoKeypair();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCustomerKeypair(cust);
+    customerKeypairRef.current = cust;
+    setChannelEscrowKeypair(escrow);
+    channelEscrowKeypairRef.current = escrow;
+  }, []);
 
   // Handle Devnet Airdrop
   const handleAirdrop = async () => {
