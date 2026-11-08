@@ -22,11 +22,8 @@ import {
   VolumeX,
   Info,
   BookOpen,
-  X,
-  Layers,
-  FileCode,
-  Scale,
   Clock,
+  Search,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { TIRIRIKA_CONFIG } from '@/lib/constants';
@@ -42,57 +39,11 @@ import {
   getSolanaConnection,
 } from '@/lib/solana';
 import { Keypair } from '@solana/web3.js';
-
-// Synthesize pleasant multi-sensory audio tones via Web Audio API
-function playAudioTone(type: 'tick' | 'settle' | 'alert') {
-  try {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-
-    if (type === 'tick') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(650, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + 0.035);
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.035);
-    } else if (type === 'settle') {
-      [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + idx * 0.08);
-        osc.stop(ctx.currentTime + idx * 0.08 + 0.35);
-      });
-    } else if (type === 'alert') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(160, ctx.currentTime);
-      gain.gain.setValueAtTime(0.14, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.25);
-    }
-  } catch {
-    // Audio context may be restricted by browser policy before first interaction
-  }
-}
+import { audioSynth } from '@/lib/audio';
+import JerrycanVisualizer from '@/components/JerrycanVisualizer';
+import VoucherInspectorModal from '@/components/VoucherInspectorModal';
+import JudgeTourBanner from '@/components/JudgeTourBanner';
+import ProtocolSpecsModal from '@/components/ProtocolSpecsModal';
 
 export default function TiririkaKioskApp() {
   // Keypairs initialized on client mount
@@ -126,9 +77,11 @@ export default function TiririkaKioskApp() {
   // Security Simulation State
   const [securityAlert, setSecurityAlert] = useState<{ type: 'attack' | 'success'; message: string } | null>(null);
 
-  // Protocol Specs Modal State
+  // Modals & Tour State
+  const [showTourBanner, setShowTourBanner] = useState<boolean>(true);
+  const [isAutoDemoRunning, setIsAutoDemoRunning] = useState<boolean>(false);
   const [showSpecsModal, setShowSpecsModal] = useState<boolean>(false);
-  const [specsTab, setSpecsTab] = useState<'economics' | 'statemachine' | 'anchor'>('economics');
+  const [selectedVoucherForInspect, setSelectedVoucherForInspect] = useState<WaterVoucher | null>(null);
 
   // Real-Time Devnet Telemetry
   const [devnetSlot, setDevnetSlot] = useState<number>(312891420);
@@ -223,7 +176,7 @@ export default function TiririkaKioskApp() {
       );
       setChannel(newChannel);
       setCustomerBalanceSol((prev) => Math.max(0, prev - depositSol));
-      if (soundEnabled) playAudioTone('settle');
+      audioSynth.playSettlementChord(soundEnabled);
     } catch {
       const fallbackChannel: PaymentChannel = {
         id: channelEscrowKeypair.publicKey.toBase58(),
@@ -237,7 +190,7 @@ export default function TiririkaKioskApp() {
       };
       setChannel(fallbackChannel);
       setCustomerBalanceSol((prev) => Math.max(0, prev - depositSol));
-      if (soundEnabled) playAudioTone('settle');
+      audioSynth.playSettlementChord(soundEnabled);
     } finally {
       setIsOpeningChannel(false);
     }
@@ -255,6 +208,7 @@ export default function TiririkaKioskApp() {
       // Solvency check against locked escrow deposit
       if (nextLamports > channel.depositLamports) {
         setIsFlowing(false);
+        audioSynth.stopWaterFlow();
         return prevLitres;
       }
 
@@ -281,7 +235,7 @@ export default function TiririkaKioskApp() {
         setVoucherCount(nextNonce);
         setVerifiedLamports(nextLamports);
         if (soundEnabled && nextNonce % 3 === 0) {
-          playAudioTone('tick');
+          audioSynth.playVoucherTick(soundEnabled);
         }
       }
 
@@ -289,22 +243,25 @@ export default function TiririkaKioskApp() {
     });
   }, [channel, customerKeypair, soundEnabled]);
 
-  // Dispenser interval management
+  // Dispenser interval management & audio flow synchronization
   useEffect(() => {
     if (isFlowing && channel?.status === 'OPEN') {
+      audioSynth.startWaterFlow(soundEnabled);
       dispenseIntervalRef.current = setInterval(() => {
         tickDispenser();
       }, 100);
     } else {
+      audioSynth.stopWaterFlow();
       if (dispenseIntervalRef.current) {
         clearInterval(dispenseIntervalRef.current);
         dispenseIntervalRef.current = null;
       }
     }
     return () => {
+      audioSynth.stopWaterFlow();
       if (dispenseIntervalRef.current) clearInterval(dispenseIntervalRef.current);
     };
-  }, [isFlowing, channel?.status, tickDispenser]);
+  }, [isFlowing, channel?.status, tickDispenser, soundEnabled]);
 
   // Quick Preset Fillers (+1L, +5L, +20L)
   const addPresetLitres = (additionalLitres: number) => {
@@ -339,7 +296,7 @@ export default function TiririkaKioskApp() {
         setLastVoucher(voucher);
         setVoucherCount(nextNonce);
         setVerifiedLamports(nextLamports);
-        if (soundEnabled) playAudioTone('tick');
+        audioSynth.playVoucherTick(soundEnabled);
       }
 
       return nextLitres;
@@ -351,6 +308,7 @@ export default function TiririkaKioskApp() {
     if (!channel || !channelEscrowKeypair) return;
     setIsSettling(true);
     setIsFlowing(false);
+    audioSynth.stopWaterFlow();
     setSecurityAlert(null);
 
     const effectiveVoucher = lastVoucher || {
@@ -375,12 +333,12 @@ export default function TiririkaKioskApp() {
       setChannel((prev) => (prev ? { ...prev, status: 'SETTLED' } : null));
 
       confetti({
-        particleCount: 140,
-        spread: 80,
+        particleCount: 150,
+        spread: 85,
         origin: { y: 0.6 },
       });
 
-      if (soundEnabled) playAudioTone('settle');
+      audioSynth.playSettlementChord(soundEnabled);
 
       const payoutSol = summary.operatorPayoutLamports / 1_000_000_000;
       const refundSol = summary.customerRefundLamports / 1_000_000_000;
@@ -401,12 +359,12 @@ export default function TiririkaKioskApp() {
       setChannel((prev) => (prev ? { ...prev, status: 'SETTLED' } : null));
 
       confetti({
-        particleCount: 100,
-        spread: 70,
+        particleCount: 110,
+        spread: 75,
         origin: { y: 0.6 },
       });
 
-      if (soundEnabled) playAudioTone('settle');
+      audioSynth.playSettlementChord(soundEnabled);
     } finally {
       setIsSettling(false);
     }
@@ -432,7 +390,7 @@ export default function TiririkaKioskApp() {
     );
 
     if (fraudAttempt.rejected) {
-      if (soundEnabled) playAudioTone('alert');
+      audioSynth.playAttackAlert(soundEnabled);
       setSecurityAlert({
         type: 'attack',
         message: fraudAttempt.error,
@@ -440,9 +398,50 @@ export default function TiririkaKioskApp() {
     }
   };
 
+  // 1-Click Automated Judge Demo Runner (Takes 25 seconds)
+  const handleAutoDemo = async () => {
+    if (isAutoDemoRunning) return;
+    setIsAutoDemoRunning(true);
+
+    try {
+      // 1. Reset
+      handleReset();
+      await new Promise((r) => setTimeout(r, 600));
+
+      // 2. Open Channel
+      await handleOpenChannel();
+      await new Promise((r) => setTimeout(r, 1200));
+
+      // 3. Start Flow and dispense water
+      setIsFlowing(true);
+      await new Promise((r) => setTimeout(r, 2000));
+      setIsFlowing(false);
+      addPresetLitres(5.0);
+      await new Promise((r) => setTimeout(r, 1000));
+
+      // 4. Toggle Offline
+      setIsKioskOnline(false);
+      await new Promise((r) => setTimeout(r, 1500));
+      addPresetLitres(2.0); // Dispense in offline mode
+      await new Promise((r) => setTimeout(r, 1500));
+
+      // 5. Test Attack
+      handleSimulateAttack();
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // 6. Return online and settle
+      setIsKioskOnline(true);
+      await new Promise((r) => setTimeout(r, 1000));
+      await handleSettle();
+    } finally {
+      setIsAutoDemoRunning(false);
+    }
+  };
+
   // Reset demo session
   const handleReset = () => {
     setIsFlowing(false);
+    audioSynth.stopWaterFlow();
     setChannel(null);
     setLitresDispensed(0);
     setVoucherCount(0);
@@ -450,6 +449,7 @@ export default function TiririkaKioskApp() {
     setVerifiedLamports(0);
     setSettlementResult(null);
     setSecurityAlert(null);
+    setSelectedVoucherForInspect(null);
     setChannelEscrowKeypair(generateDemoKeypair());
   };
 
@@ -462,8 +462,21 @@ export default function TiririkaKioskApp() {
   const feesSavedLamports = Math.max(0, (voucherCount - 1) * 5000);
   const jerrycanPercentage = Math.min(100, Math.round((litresDispensed / 20) * 100));
 
+  // Determine current lifecycle step for Tour
+  const currentLifecycleStep = !channel ? 1 : channel.status === 'SETTLED' ? 5 : litresDispensed > 0 ? 3 : 2;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none antialiased">
+      {/* Judge 60-Second Walkthrough Top Banner */}
+      {showTourBanner && (
+        <JudgeTourBanner
+          currentStep={currentLifecycleStep}
+          onAutoDemo={handleAutoDemo}
+          isAutoDemoRunning={isAutoDemoRunning}
+          onDismiss={() => setShowTourBanner(false)}
+        />
+      )}
+
       {/* Top Header Bar */}
       <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 py-3.5 sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
@@ -830,7 +843,7 @@ export default function TiririkaKioskApp() {
                   </div>
                 )}
 
-                {/* Live Off-Chain Voucher Stream Log */}
+                {/* Live Off-Chain Voucher Stream Log with Click-to-Inspect Audit */}
                 <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/90">
                   <div className="flex items-center justify-between text-xs mb-2.5">
                     <span className="font-bold text-slate-200 flex items-center gap-1.5">
@@ -843,11 +856,19 @@ export default function TiririkaKioskApp() {
                   </div>
                   {lastVoucher ? (
                     <div className="space-y-2 text-xs font-mono text-slate-300">
-                      <div className="flex justify-between items-center bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVoucherForInspect(lastVoucher)}
+                        className="w-full flex justify-between items-center bg-slate-900/90 hover:bg-slate-850 p-2.5 rounded-xl border border-slate-800 hover:border-cyan-500/60 transition-all cursor-pointer text-left group"
+                        title="Click to inspect raw Ed25519 signature payload"
+                      >
                         <span className="text-slate-400">Nonce: #{lastVoucher.nonce}</span>
                         <span className="text-cyan-300 font-bold">{lastVoucher.cumulativeLitres.toFixed(1)} L</span>
                         <span className="text-emerald-400 font-bold">{lastVoucher.cumulativeLamports.toLocaleString()} lamports</span>
-                      </div>
+                        <span className="text-[10px] text-cyan-400 opacity-80 group-hover:opacity-100 flex items-center gap-1">
+                          <Search className="w-3 h-3" /> Audit
+                        </span>
+                      </button>
                       <div className="text-[10px] text-slate-500 truncate bg-slate-950 p-1.5 rounded-lg border border-slate-900">
                         Ed25519 Sig: {lastVoucher.signature}
                       </div>
@@ -941,60 +962,12 @@ export default function TiririkaKioskApp() {
               </div>
             </div>
 
-            {/* Authentic Nairobi 20L Yellow Jerrycan Container Visualizer */}
-            <div className="bg-slate-950/90 rounded-2xl p-5 border border-slate-800 mb-5 flex flex-col items-center">
-              <div className="w-full flex justify-between items-center text-xs mb-4">
-                <span className="text-slate-200 font-bold flex items-center gap-1.5">
-                  <Droplets className="w-4 h-4 text-cyan-400" />
-                  Nairobi 20L Jerrycan Visualizer
-                </span>
-                <span className="font-mono text-amber-400 font-extrabold bg-amber-950/70 border border-amber-700/60 px-2.5 py-0.5 rounded-lg">
-                  {litresDispensed.toFixed(1)} / 20.0 L ({jerrycanPercentage}%)
-                </span>
-              </div>
-
-              {/* Iconic African Yellow Jerrycan Shape */}
-              <div className="relative w-44 h-56 flex flex-col items-center">
-                {/* Jerrycan Handle & Cap on top */}
-                <div className="w-32 h-6 flex justify-between items-center px-2">
-                  <div className="w-7 h-4 bg-amber-600 rounded-t-md border-t-2 border-x-2 border-amber-400 shadow-sm" />
-                  <div className="w-14 h-4 border-t-4 border-amber-400 rounded-t-xl" />
-                  <div className="w-5 h-5 bg-red-600 rounded-md border-2 border-red-400 shadow-sm" title="Red Screw Cap" />
-                </div>
-
-                {/* Main Yellow Plastic Body */}
-                <div className="relative w-40 h-48 bg-amber-500/15 border-4 border-amber-400 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-end p-1.5">
-                  {/* Molded Ribs Decoration */}
-                  <div className="absolute inset-x-3 top-3 h-0.5 bg-amber-400/30 rounded" />
-                  <div className="absolute inset-x-3 top-6 h-0.5 bg-amber-400/30 rounded" />
-                  <div className="absolute inset-y-8 left-3 w-0.5 bg-amber-400/30 rounded" />
-                  <div className="absolute inset-y-8 right-3 w-0.5 bg-amber-400/30 rounded" />
-
-                  {/* Litre measurement lines on side */}
-                  <div className="absolute right-2 inset-y-3 flex flex-col justify-between items-end text-[9px] font-mono text-amber-300/80 font-bold pointer-events-none z-10">
-                    <span>20L —</span>
-                    <span>15L —</span>
-                    <span>10L —</span>
-                    <span>5L —</span>
-                    <span>0L —</span>
-                  </div>
-
-                  {/* Water Liquid Filling Level */}
-                  <div
-                    className="w-full bg-gradient-to-t from-cyan-600 via-sky-500 to-cyan-400 rounded-2xl transition-all duration-300 relative overflow-hidden shadow-inner"
-                    style={{ height: `${jerrycanPercentage}%` }}
-                  >
-                    {isFlowing && <div className="absolute inset-0 bg-white/25 animate-pulse" />}
-                  </div>
-
-                  {/* Big Percentage Label in Center */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center font-mono font-black text-white pointer-events-none drop-shadow-md">
-                    <span className="text-xl">{jerrycanPercentage}%</span>
-                    <span className="text-[10px] text-cyan-100 font-normal">{litresDispensed.toFixed(1)} L</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Authentic Nairobi 20L Yellow Jerrycan Container Visualizer Component */}
+            <JerrycanVisualizer
+              litresDispensed={litresDispensed}
+              jerrycanPercentage={jerrycanPercentage}
+              isFlowing={isFlowing}
+            />
 
             {/* Settlement Summary Card (if settled) */}
             {settlementResult && (
@@ -1072,243 +1045,16 @@ export default function TiririkaKioskApp() {
         </div>
       </footer>
 
-      {/* ========================================================= */}
-      {/* PROTOCOL SPECS & ARCHITECTURE MODAL DRAWER */}
-      {/* ========================================================= */}
-      {showSpecsModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="specs-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
-        >
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 id="specs-title" className="text-base font-bold text-white">
-                    Tiririka Protocol Specifications & Economics
-                  </h3>
-                  <p className="text-xs text-slate-400">Formal Architecture, Cryptographic Guarantees & On-Chain Anchor Model</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSpecsModal(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 transition-all cursor-pointer"
-                aria-label="Close Modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* Protocol Specs Modal */}
+      {showSpecsModal && <ProtocolSpecsModal onClose={() => setShowSpecsModal(false)} />}
 
-            {/* Modal Tabs Navigation */}
-            <div className="flex border-b border-slate-800 bg-slate-950/30 px-5 pt-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setSpecsTab('economics')}
-                className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                  specsTab === 'economics'
-                    ? 'border-cyan-400 text-cyan-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Scale className="w-4 h-4" />
-                <span>Economic Model & Gas Savings</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSpecsTab('statemachine')}
-                className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                  specsTab === 'statemachine'
-                    ? 'border-cyan-400 text-cyan-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-                <span>State Machine & Security</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSpecsTab('anchor')}
-                className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                  specsTab === 'anchor'
-                    ? 'border-cyan-400 text-cyan-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <FileCode className="w-4 h-4" />
-                <span>Anchor Rust Program</span>
-              </button>
-            </div>
-
-            {/* Modal Content Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-300">
-              {/* TAB 1: Economics */}
-              {specsTab === 'economics' && (
-                <div className="space-y-4">
-                  <div className="p-4 bg-cyan-950/40 border border-cyan-800/60 rounded-2xl space-y-2">
-                    <div className="font-bold text-cyan-200 text-sm">The Micro-Water Fee Dilemma in Nairobi:</div>
-                    <p className="text-slate-300 leading-relaxed">
-                      In Nairobi informal settlements like Mathare and Kibera, clean water is sold at regulated community
-                      kiosks for <strong>KES 3.00 per 20L Jerrycan</strong> (approx. <strong>$0.023 USD</strong>, or{' '}
-                      <strong>$0.00115 per Litre</strong>).
-                    </p>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left font-mono border border-slate-800 rounded-xl overflow-hidden">
-                      <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px]">
-                        <tr>
-                          <th className="p-2.5">Architecture</th>
-                          <th className="p-2.5">Fee per Litre</th>
-                          <th className="p-2.5">Fee for 20L (100 Ticks)</th>
-                          <th className="p-2.5">Feasibility</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 bg-slate-900/60 text-slate-300">
-                        <tr>
-                          <td className="p-2.5 font-bold text-rose-400">Ethereum L1</td>
-                          <td className="p-2.5">~$0.85</td>
-                          <td className="p-2.5">~$85.00</td>
-                          <td className="p-2.5 text-rose-400">Impossible (3,695% of water cost)</td>
-                        </tr>
-                        <tr>
-                          <td className="p-2.5 font-bold text-amber-400">Direct Solana L1</td>
-                          <td className="p-2.5">~$0.0013</td>
-                          <td className="p-2.5">~$0.13</td>
-                          <td className="p-2.5 text-amber-300">Unviable (560% overhead on 20L)</td>
-                        </tr>
-                        <tr className="bg-emerald-950/40 font-bold text-emerald-300">
-                          <td className="p-2.5 flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                            Tiririka Protocol
-                          </td>
-                          <td className="p-2.5">$0.000026</td>
-                          <td className="p-2.5">$0.0026 (2 txs total)</td>
-                          <td className="p-2.5 text-emerald-400">99.8% Gas Fee Savings</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <p className="text-slate-400 leading-relaxed text-[11px]">
-                    By using an on-chain escrow deposit combined with off-chain Ed25519 digital vouchers, customers draw water
-                    continuously at sub-millisecond speeds. The kiosk terminal settles only one single transaction on Solana when
-                    finished.
-                  </p>
-                </div>
-              )}
-
-              {/* TAB 2: State Machine & Security */}
-              {specsTab === 'statemachine' && (
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3 font-mono text-[11px]">
-                    <div className="text-cyan-400 font-bold text-xs uppercase">Cryptographic Lifecycle:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-center">
-                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">1. UNFUNDED</div>
-                      <div className="p-2 rounded-lg bg-blue-950 border border-blue-700 text-blue-200">2. ESCROW OPEN</div>
-                      <div className="p-2 rounded-lg bg-cyan-950 border border-cyan-700 text-cyan-200">
-                        3. OFFLINE VOUCHERS
-                      </div>
-                      <div className="p-2 rounded-lg bg-emerald-950 border border-emerald-700 text-emerald-200">
-                        4. SETTLED
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div className="font-bold text-white text-xs">Four Cryptographic Security Guarantees:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1">
-                        <div className="font-bold text-cyan-300">1. Replay Attack Defense</div>
-                        <p className="text-slate-400 text-[11px]">
-                          Each voucher has a strictly monotonic nonce. The terminal rejects any nonce $\le$ previous highest.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1">
-                        <div className="font-bold text-cyan-300">2. Solvency Ceiling</div>
-                        <p className="text-slate-400 text-[11px]">
-                          Cumulative lamports can never mathematically exceed the initial deposit locked in the on-chain vault.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1">
-                        <div className="font-bold text-cyan-300">3. Anti-Theft Protection</div>
-                        <p className="text-slate-400 text-[11px]">
-                          A rogue kiosk operator cannot claim more lamports than authorized by the customer&apos;s Ed25519 signature.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1">
-                        <div className="font-bold text-cyan-300">4. 24h Timelock Exit</div>
-                        <p className="text-slate-400 text-[11px]">
-                          If the kiosk hardware suffers a catastrophic failure, unspent escrow is unilaterally reclaimable by the customer.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: Anchor Program */}
-              {specsTab === 'anchor' && (
-                <div className="space-y-3 font-mono text-[11px]">
-                  <div className="flex items-center justify-between text-slate-400">
-                    <span>contracts/tiririka/src/lib.rs (Anchor v0.30)</span>
-                    <span className="text-emerald-400">Mainnet-Ready Architecture</span>
-                  </div>
-                  <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-slate-300 overflow-x-auto text-[10px] leading-relaxed">
-{`#[program]
-pub mod tiririka_program {
-    use super::*;
-
-    // 1. Locks deposit into Escrow Vault PDA
-    pub fn initialize_channel(
-        ctx: Context<InitializeChannel>,
-        channel_id: String,
-        deposit_lamports: u64,
-        price_per_litre_lamports: u64,
-        timelock_seconds: i64,
-    ) -> Result<()> { ... }
-
-    // 2. Settles payout to operator & refunds customer
-    pub fn settle_channel(
-        ctx: Context<SettleChannel>,
-        nonce: u64,
-        cumulative_litres: u64,
-        cumulative_lamports: u64,
-        voucher_timestamp: i64,
-        signature: [u8; 64],
-    ) -> Result<()> { ... }
-
-    // 3. Unilateral emergency exit after 24h timelock
-    pub fn dispute_timeout_refund(ctx: Context<DisputeRefund>) -> Result<()> { ... }
-}`}
-                  </pre>
-                  <p className="text-slate-400 text-[11px]">
-                    Full Anchor source code and IDL specification are published in the project repository under{' '}
-                    <code className="text-cyan-300">/contracts/tiririka</code>.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-              <span>Program ID: Tirir1kaPayPerL1treWaterK1oskProtoco11111111</span>
-              <button
-                type="button"
-                onClick={() => setShowSpecsModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all cursor-pointer"
-              >
-                Close Specs
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Voucher Cryptographic Audit Inspector Modal */}
+      {selectedVoucherForInspect && channel && (
+        <VoucherInspectorModal
+          voucher={selectedVoucherForInspect}
+          channelDepositLamports={channel.depositLamports}
+          onClose={() => setSelectedVoucherForInspect(null)}
+        />
       )}
     </div>
   );
