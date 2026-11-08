@@ -1,6 +1,24 @@
 {
   "name": "tiririka",
   "version": "0.1.0",
+  "description": "Pay-per-litre water kiosk protocol on Solana payment channels for Nairobi informal settlements",
+  "author": "Prince Nzamuwe <princenzmw>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/princenzmw/tiririka.git"
+  },
+  "homepage": "https://tiririka.vercel.app",
+  "keywords": [
+    "solana",
+    "payment-channels",
+    "micropayments",
+    "depin",
+    "iot",
+    "ed25519",
+    "anchor",
+    "nairobi"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev -p 3300",

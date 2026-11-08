@@ -59,14 +59,16 @@ In Nairobi's informal settlements (Mathare, Kibera, Mukuru), clean water is dist
 
 ---
 
-## 3. The 2-Minute Demo Flow
+## 3. Protocol Lifecycle & Operational Architecture
 
-1. **The Hook (0:00 - 0:15):** In Nairobi, 20L costs KES 3. Per-litre payments on any blockchain would burn 100% of the cost in transaction fees. Tiririka proves how payment channels solve this for physical infrastructure.
-2. **Open Channel (0:15 - 0:35):** Customer connects demo wallet, selects a 0.01 SOL deposit cap, and confirms on Solana Devnet (1 on-chain transaction).
-3. **The Fluid Stream (0:35 - 0:55):** Click the tap button or quick fill presets: water flows continuously, the 20L jerrycan fills with live wave animation, vouchers stream every 0.1L, and the on-chain transaction count stays strictly at **1**.
-4. **The Internet Cut (0:55 - 1:15):** Toggle the kiosk offline. Amber badge activates: water keeps flowing across multiple customer sessions! The kiosk verifies Ed25519 signatures locally in under 1ms without an RPC connection.
-5. **Anti-Cheat Defense (1:15 - 1:35):** In the 3-Vector Cryptographic Threat Lab, launch Stale Replay or Payload Tampering attacks. The local verification guard blocks the attack instantly with plain-English proofs.
-6. **Stop & Settle (1:35 - 2:00):** Settle on Solana. One final on-chain transaction distributes earned lamports to the kiosk operator and refunds unspent deposit back to the customer. Immediate Solana Explorer verification link and option to start the next customer fill.
+Tiririka operates across six deterministic phases designed for physical IoT micro-utilities:
+
+1. **Escrow Collateral Initialization (On-Chain Tx #1):** The consumer opens a payment channel by locking a spending cap deposit (e.g., 0.01 SOL ≈ 1,557 litres) into an isolated PDA escrow vault on Solana Devnet.
+2. **High-Frequency Off-Chain Micropayment Streaming:** As water flows from the nozzle (0.1L ticks), the consumer's client cryptographically signs cumulative Ed25519 vouchers off-chain. Monotonically incrementing nonces and lamports accumulate with zero gas fees.
+3. **Cellular Blackout Fault Tolerance:** When cellular connectivity drops in informal settlements, the physical kiosk terminal switches seamlessly to local in-memory verification (< 1ms). Water continues dispensing without interruption across consecutive customer sessions.
+4. **Cryptographic Threat Defense (In-Memory Guard):** The terminal inspects every incoming voucher against three threat vectors—stale nonce replays, escrow solvency breaches, and payload signature tampering—halting the solenoid valve instantly if any check fails.
+5. **On-Chain Settlement & Instant Collateral Refund (On-Chain Tx #2):** When the tap closes, the kiosk broadcasts the single highest signed voucher to Solana Devnet. The operator receives payout for the exact litres dispensed, and all unspent deposit lamports are automatically refunded back to the consumer.
+6. **Unilateral Consumer Timelock Exit:** If the kiosk hardware suffers power failure or network loss exceeding 24 hours, an on-chain timelock guarantees the consumer can reclaim 100% of remaining escrow collateral unilaterally without operator permission.
 
 ---
 
