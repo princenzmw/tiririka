@@ -484,7 +484,7 @@ export default function TiririkaKioskApp() {
     setSettlementResult(null);
     setSecurityAlert(null);
     setSelectedVoucherForInspect(null);
-    setIsKioskOnline(true);
+    // Preserves isKioskOnline: In physical deployments, network outages persist across multiple customer sessions
     setCustomerKeypair(generateDemoKeypair());
     setChannelEscrowKeypair(generateDemoKeypair());
   };
@@ -773,9 +773,13 @@ export default function TiririkaKioskApp() {
                       <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div>
-                      <h3 className="text-base font-extrabold text-white">Water Transaction Settled On-Chain</h3>
+                      <h3 className="text-base font-extrabold text-white">
+                        {isKioskOnline ? 'Water Transaction Settled On-Chain' : 'Water Transaction Verified & Stored (Offline)'}
+                      </h3>
                       <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto leading-relaxed">
-                        The channel escrow has closed on Solana Devnet. The kiosk operator has received their earnings and your remaining deposit was refunded.
+                        {isKioskOnline
+                          ? 'The channel escrow has closed on Solana Devnet. The kiosk operator has received their earnings and your remaining deposit was refunded.'
+                          : 'Cellular network is severed. The final voucher is cryptographically signed, verified, and sealed in local 128KB Flash NVRAM. Settlement will batch-broadcast to Solana upon network restoration.'}
                       </p>
                     </div>
 
@@ -1134,7 +1138,9 @@ export default function TiririkaKioskApp() {
               <div className="p-4 bg-emerald-950/60 border border-emerald-600 rounded-2xl space-y-3 mb-5 shadow-xl shadow-emerald-950">
                 <div className="flex items-center gap-2 text-emerald-300 font-extrabold text-sm">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  Channel Successfully Settled On Solana Devnet!
+                  {isKioskOnline
+                    ? 'Channel Successfully Settled On Solana Devnet!'
+                    : 'Session Finalized Locally in 128KB Flash Buffer (Offline Mode)'}
                 </div>
                 <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
                   <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
