@@ -91,6 +91,21 @@ export default function TiririkaKioskApp() {
   // Dispense interval timer ref
   const dispenseIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Synchronous State Refs to guarantee Async/Auto-Demo immunity against stale React closures
+  const channelRef = useRef<PaymentChannel | null>(channel);
+  const lastVoucherRef = useRef<WaterVoucher | null>(lastVoucher);
+  const voucherCountRef = useRef<number>(voucherCount);
+  const verifiedLamportsRef = useRef<number>(verifiedLamports);
+  const customerKeypairRef = useRef<Keypair | null>(customerKeypair);
+  const channelEscrowKeypairRef = useRef<Keypair | null>(channelEscrowKeypair);
+
+  useEffect(() => { channelRef.current = channel; }, [channel]);
+  useEffect(() => { lastVoucherRef.current = lastVoucher; }, [lastVoucher]);
+  useEffect(() => { voucherCountRef.current = voucherCount; }, [voucherCount]);
+  useEffect(() => { verifiedLamportsRef.current = verifiedLamports; }, [verifiedLamports]);
+  useEffect(() => { customerKeypairRef.current = customerKeypair; }, [customerKeypair]);
+  useEffect(() => { channelEscrowKeypairRef.current = channelEscrowKeypair; }, [channelEscrowKeypair]);
+
   // Update balances from Devnet
   const refreshBalances = useCallback(async () => {
     if (customerKeypair) {
@@ -175,6 +190,7 @@ export default function TiririkaKioskApp() {
         channelEscrowKeypair
       );
       setChannel(newChannel);
+      channelRef.current = newChannel;
       setCustomerBalanceSol((prev) => Math.max(0, prev - depositSol));
       audioSynth.playSettlementChord(soundEnabled);
     } catch {
@@ -189,6 +205,7 @@ export default function TiririkaKioskApp() {
         pricePerLitreLamports: TIRIRIKA_CONFIG.LAMPORTS_PER_LITRE,
       };
       setChannel(fallbackChannel);
+      channelRef.current = fallbackChannel;
       setCustomerBalanceSol((prev) => Math.max(0, prev - depositSol));
       audioSynth.playSettlementChord(soundEnabled);
     } finally {
@@ -265,37 +282,42 @@ export default function TiririkaKioskApp() {
 
   // Quick Preset Fillers (+1L, +5L, +20L)
   const addPresetLitres = (additionalLitres: number) => {
-    if (!channel || !customerKeypair || channel.status !== 'OPEN') return;
+    const activeChannel = channelRef.current || channel;
+    const activeCustomer = customerKeypairRef.current || customerKeypair;
+    if (!activeChannel || !activeCustomer || activeChannel.status !== 'OPEN') return;
 
     setLitresDispensed((prevLitres) => {
       const nextLitres = Number((prevLitres + additionalLitres).toFixed(2));
       const nextNonce = Math.round(nextLitres / TIRIRIKA_CONFIG.LITRES_PER_TICK);
       const nextLamports = nextNonce * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK;
 
-      if (nextLamports > channel.depositLamports) {
+      if (nextLamports > activeChannel.depositLamports) {
         return prevLitres;
       }
 
       const voucher = signWaterVoucher(
-        channel.id,
+        activeChannel.id,
         nextNonce,
         nextLitres,
         nextLamports,
-        customerKeypair.secretKey,
-        customerKeypair.publicKey.toBase58()
+        activeCustomer.secretKey,
+        activeCustomer.publicKey.toBase58()
       );
 
       const verification = verifyVoucherLocally(
         voucher,
-        channel,
-        voucherCount,
-        verifiedLamports
+        activeChannel,
+        voucherCountRef.current,
+        verifiedLamportsRef.current
       );
 
       if (verification.isValid) {
         setLastVoucher(voucher);
+        lastVoucherRef.current = voucher;
         setVoucherCount(nextNonce);
+        voucherCountRef.current = nextNonce;
         setVerifiedLamports(nextLamports);
+        verifiedLamportsRef.current = nextLamports;
         audioSynth.playVoucherTick(soundEnabled);
       }
 
@@ -305,32 +327,35 @@ export default function TiririkaKioskApp() {
 
   // Settle Channel on Solana Devnet
   const handleSettle = async () => {
-    if (!channel || !channelEscrowKeypair) return;
+    const activeChannel = channelRef.current || channel;
+    const activeEscrow = channelEscrowKeypairRef.current || channelEscrowKeypair;
+    if (!activeChannel || !activeEscrow) return;
     setIsSettling(true);
     setIsFlowing(false);
     audioSynth.stopWaterFlow();
     setSecurityAlert(null);
 
-    const effectiveVoucher = lastVoucher || {
-      channelId: channel.id,
+    const effectiveVoucher = lastVoucherRef.current || lastVoucher || {
+      channelId: activeChannel.id,
       nonce: 0,
       cumulativeLitres: 0,
       cumulativeLamports: 0,
       timestamp: Date.now(),
       signature: '0NoVoucherDirectRefund111111111111111111111111111111111',
-      customerPublicKey: channel.customerPublicKey,
+      customerPublicKey: activeChannel.customerPublicKey,
     };
 
     try {
       const summary = await settleOnChainChannel(
-        channel,
+        activeChannel,
         effectiveVoucher,
-        channelEscrowKeypair,
-        voucherCount
+        activeEscrow,
+        voucherCountRef.current || voucherCount
       );
 
       setSettlementResult(summary);
       setChannel((prev) => (prev ? { ...prev, status: 'SETTLED' } : null));
+      if (channelRef.current) channelRef.current.status = 'SETTLED';
 
       confetti({
         particleCount: 150,
@@ -346,17 +371,18 @@ export default function TiririkaKioskApp() {
       setCustomerBalanceSol((prev) => prev + refundSol);
     } catch {
       const simulatedSummary: SettlementSummary = {
-        channelId: channel.id,
-        totalVouchersReceived: voucherCount,
+        channelId: activeChannel.id,
+        totalVouchersReceived: voucherCountRef.current || voucherCount,
         highestValidVoucher: effectiveVoucher,
         operatorPayoutLamports: effectiveVoucher.cumulativeLamports,
-        customerRefundLamports: Math.max(0, channel.depositLamports - effectiveVoucher.cumulativeLamports),
+        customerRefundLamports: Math.max(0, activeChannel.depositLamports - effectiveVoucher.cumulativeLamports),
         settlementTxSignature: '5SettledDevnetWaterPayoutAndRefund1111111111111111111111111',
         explorerUrl: `${TIRIRIKA_CONFIG.EXPLORER_BASE_URL}/tx/5SettledDevnetWaterPayoutAndRefund1111111111111111111111111?cluster=devnet`,
       };
 
       setSettlementResult(simulatedSummary);
       setChannel((prev) => (prev ? { ...prev, status: 'SETTLED' } : null));
+      if (channelRef.current) channelRef.current.status = 'SETTLED';
 
       confetti({
         particleCount: 110,
@@ -372,21 +398,22 @@ export default function TiririkaKioskApp() {
 
   // Simulate Rogue Operator Over-Claim Attack
   const handleSimulateAttack = () => {
-    if (!channel) return;
-    const effectiveVoucher = lastVoucher || {
-      channelId: channel.id,
+    const activeChannel = channelRef.current || channel;
+    if (!activeChannel) return;
+    const effectiveVoucher = lastVoucherRef.current || lastVoucher || {
+      channelId: activeChannel.id,
       nonce: 0,
       cumulativeLitres: 0,
       cumulativeLamports: 0,
       timestamp: Date.now(),
       signature: '',
-      customerPublicKey: channel.customerPublicKey,
+      customerPublicKey: activeChannel.customerPublicKey,
     };
 
     const fraudAttempt = simulateOverClaimAttempt(
-      channel,
+      activeChannel,
       effectiveVoucher,
-      channel.depositLamports
+      activeChannel.depositLamports
     );
 
     if (fraudAttempt.rejected) {
