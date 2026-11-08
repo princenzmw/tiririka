@@ -3,11 +3,16 @@
 > **Pay-per-litre water kiosk protocol on Solana payment channels.**  
 > Built for the **MLH Solana Hackathon (November 6–8, 2026)**.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Demo: Live on Vercel](https://img.shields.io/badge/Demo-Live%20on%20Vercel-000000?logo=vercel&logoColor=white)](https://tiririka.vercel.app)
 [![Network: Solana Devnet](https://img.shields.io/badge/Solana-Devnet-14F195?logo=solana&logoColor=black)](https://explorer.solana.com/?cluster=devnet)
 [![TypeScript: 5.x](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js: 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Tests: 100% Pass](https://img.shields.io/badge/Tests-100%25%20Passing-emerald)](https://github.com/princenzmw/tiririka)
+[![Tests: 100% Pass](https://img.shields.io/badge/Tests-7%2F7%20Passing-emerald)](https://github.com/princenzmw/tiririka)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Live Production App:** [https://tiririka.vercel.app](https://tiririka.vercel.app)  
+**Public Repository:** [https://github.com/princenzmw/tiririka](https://github.com/princenzmw/tiririka)  
+**Verified Devnet Operator:** [`2wYHsuCApQqVwxKv6Hi8YcueqF8pMVTRrweSAAQ3FVy2`](https://explorer.solana.com/address/2wYHsuCApQqVwxKv6Hi8YcueqF8pMVTRrweSAAQ3FVy2?cluster=devnet)
 
 ---
 
@@ -89,13 +94,17 @@ See [contracts/tiririka/src/lib.rs](contracts/tiririka/src/lib.rs) and [contract
 
 ---
 
-## 6. Quickstart & Local Development
+## 6. Live App & Local Development
 
-### Prerequisites
+### Live Production Deployment
+Experience the live protocol instantly without installation:  
+👉 **[https://tiririka.vercel.app](https://tiririka.vercel.app)**
+
+### Prerequisites for Local Run
 * Node.js v20+ or v26+
 * npm or pnpm
 
-### Installation
+### Local Installation & Automated Tests
 ```bash
 # Clone the repository
 git clone https://github.com/princenzmw/tiririka.git
@@ -104,7 +113,7 @@ cd tiririka
 # Install dependencies
 npm install --ignore-scripts
 
-# Run the automated cryptographic test suite
+# Run the automated cryptographic test suite (7/7 passing)
 npm test
 ```
 
