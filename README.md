@@ -73,10 +73,23 @@ In Nairobi's informal settlements (Mathare, Kibera, Mukuru), clean water is dist
 * **Cumulative Monotonicity:** Lamports owed must increase monotonically (`lamports >= lastVerifiedLamports`).
 * **Solvency Guard:** Vouchers exceeding `channel.depositLamports` are rejected immediately.
 * **Local Speed:** In-memory Ed25519 signature checks execute in **under 1ms per voucher** with zero network overhead.
+* **Unilateral Timelock Exit:** 24-hour timelock guarantees the consumer can unilaterally reclaim unspent escrow deposit if kiosk hardware fails.
 
 ---
 
-## 5. Quickstart & Local Development
+## 5. On-Chain Anchor Smart Contract Specification
+
+The project includes a complete Solana Anchor v0.30 smart contract blueprint located under `/contracts/tiririka`:
+
+* **`initialize_channel`**: Creates the `PaymentChannel` PDA and locks deposit lamports in an isolated `Escrow Vault PDA`.
+* **`settle_channel`**: Introspects Solana's native Ed25519 precompile instruction to verify customer digital signatures, pays earned lamports to the operator, and refunds unspent balance.
+* **`dispute_timeout_refund`**: Protects the customer against operator downtime or abandonment by allowing unilateral deposit reclamation after the timelock elapses.
+
+See [contracts/tiririka/src/lib.rs](contracts/tiririka/src/lib.rs) and [contracts/tiririka/idl.json](contracts/tiririka/idl.json) for the full source and IDL.
+
+---
+
+## 6. Quickstart & Local Development
 
 ### Prerequisites
 * Node.js v20+ or v26+

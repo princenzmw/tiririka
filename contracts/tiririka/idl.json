@@ -1,0 +1,95 @@
+{
+  "version": "0.1.0",
+  "name": "tiririka_program",
+  "instructions": [
+    {
+      "name": "initializeChannel",
+      "accounts": [
+        { "name": "channel", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "customer", "isMut": true, "isSigner": true },
+        { "name": "operator", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "channelId", "type": "string" },
+        { "name": "depositLamports", "type": "u64" },
+        { "name": "pricePerLitreLamports", "type": "u64" },
+        { "name": "timelockSeconds", "type": "i64" }
+      ]
+    },
+    {
+      "name": "settleChannel",
+      "accounts": [
+        { "name": "channel", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "customer", "isMut": true, "isSigner": false },
+        { "name": "operator", "isMut": true, "isSigner": true },
+        { "name": "ixSysvar", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "nonce", "type": "u64" },
+        { "name": "cumulativeLitres", "type": "u64" },
+        { "name": "cumulativeLamports", "type": "u64" },
+        { "name": "voucherTimestamp", "type": "i64" },
+        { "name": "signature", "type": { "array": ["u8", 64] } }
+      ]
+    },
+    {
+      "name": "disputeTimeoutRefund",
+      "accounts": [
+        { "name": "channel", "isMut": true, "isSigner": false },
+        { "name": "vault", "isMut": true, "isSigner": false },
+        { "name": "customer", "isMut": true, "isSigner": true },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PaymentChannel",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "customer", "type": "publicKey" },
+          { "name": "operator", "type": "publicKey" },
+          { "name": "channelId", "type": "string" },
+          { "name": "depositLamports", "type": "u64" },
+          { "name": "pricePerLitreLamports", "type": "u64" },
+          { "name": "highestNonce", "type": "u64" },
+          { "name": "claimedLamports", "type": "u64" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "timelockRefundTs", "type": "i64" },
+          { "name": "status", "type": { "defined": "ChannelStatus" } },
+          { "name": "vaultBump", "type": "u8" },
+          { "name": "channelBump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "ChannelStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Open" },
+          { "name": "Settled" },
+          { "name": "RefundedByTimelock" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "ZeroDeposit", "msg": "Deposit must be greater than zero." },
+    { "code": 6001, "name": "TimelockTooShort", "msg": "Timelock must be at least 1 hour (3600 seconds)." },
+    { "code": 6002, "name": "ChannelNotOpen", "msg": "Channel is not open." },
+    { "code": 6003, "name": "NonceNotMonotonic", "msg": "Nonce is not strictly monotonic." },
+    { "code": 6004, "name": "SolvencyExceeded", "msg": "Claimed lamports exceeds total locked channel deposit." },
+    { "code": 6005, "name": "CalculationMismatch", "msg": "Cumulative lamports does not match cumulative litres * price." },
+    { "code": 6006, "name": "InvalidSignature", "msg": "Ed25519 digital signature verification failed." },
+    { "code": 6007, "name": "TimelockNotReached", "msg": "Timelock period has not elapsed yet." }
+  ]
+}

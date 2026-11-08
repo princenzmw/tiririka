@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="dropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="50%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#14b8a6" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <!-- Background circular badge -->
+  <rect width="32" height="32" rx="8" fill="#020617" />
+  <rect width="30" height="30" x="1" y="1" rx="7" fill="none" stroke="#0ea5e9" stroke-width="1.5" stroke-opacity="0.4" />
+  
+  <!-- Flowing Water Droplet -->
+  <path d="M16 4 C16 4 7 14.5 7 20 C7 25 11 28 16 28 C21 28 25 25 25 20 C25 14.5 16 4 16 4 Z" fill="url(#dropGrad)" />
+  
+  <!-- Highlight Reflection -->
+  <path d="M16 7 C16 7 10 15 10 19 C10 20.5 10.8 22 12 22.8 C11.2 21.5 11 20 11.5 18 C12.5 14 16 7 16 7 Z" fill="url(#glowGrad)" />
+  
+  <!-- Mini Ripple -->
+  <circle cx="16" cy="22" r="2" fill="#ffffff" fill-opacity="0.4" />
+</svg>
