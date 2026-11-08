@@ -370,6 +370,41 @@ export default function TiririkaKioskApp() {
               </div>
             </div>
 
+            {/* 3-Step Lifecycle Indicator */}
+            <div className="grid grid-cols-3 gap-2 mb-5 text-[11px] font-mono">
+              <div
+                className={`p-2 rounded-lg border text-center transition-colors ${
+                  !channel
+                    ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300 font-bold'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-500'
+                }`}
+              >
+                1. Open Channel
+              </div>
+              <div
+                className={`p-2 rounded-lg border text-center transition-colors ${
+                  channel && channel.status === 'OPEN' && litresDispensed === 0
+                    ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300 font-bold'
+                    : channel && channel.status === 'OPEN' && litresDispensed > 0
+                    ? 'bg-blue-950/40 border-blue-800 text-blue-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-500'
+                }`}
+              >
+                2. Hold Tap
+              </div>
+              <div
+                className={`p-2 rounded-lg border text-center transition-colors ${
+                  channel && channel.status === 'SETTLED'
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold'
+                    : channel && litresDispensed > 0
+                    ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300 font-bold animate-pulse'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-500'
+                }`}
+              >
+                3. Stop & Settle
+              </div>
+            </div>
+
             {/* Step 1: Channel Funding & Setup */}
             {!channel ? (
               <div className="space-y-4">
@@ -421,6 +456,9 @@ export default function TiririkaKioskApp() {
                     </>
                   )}
                 </button>
+                <p className="text-[11px] text-slate-500 text-center font-mono pt-1">
+                  Click above to open the channel. This unlocks the tap dispenser & on-chain settlement.
+                </p>
               </div>
             ) : (
               /* Step 2: Interactive Dispenser Controls */
@@ -467,23 +505,32 @@ export default function TiririkaKioskApp() {
                   </div>
                 )}
 
-                {/* Settle Channel Action */}
-                {channel.status === 'OPEN' && litresDispensed > 0 && (
+                {/* Settle Channel Action (Always visible when channel is open) */}
+                {channel.status === 'OPEN' && (
                   <div className="pt-2">
                     <button
                       onClick={handleSettle}
-                      disabled={isSettling}
-                      className="w-full py-3.5 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={isSettling || litresDispensed === 0}
+                      className={`w-full py-3.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+                        litresDispensed > 0
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/25 cursor-pointer'
+                          : 'bg-slate-800/80 border border-slate-700/60 text-slate-400 cursor-not-allowed opacity-75'
+                      }`}
                     >
                       {isSettling ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <RefreshCw className="w-4 h-4 animate-spin text-emerald-300" />
                           <span>Settling on Solana Devnet...</span>
+                        </>
+                      ) : litresDispensed > 0 ? (
+                        <>
+                          <Sparkles className="w-4 h-4 text-emerald-300" />
+                          <span>Stop & Settle on Solana (1 Final Transaction)</span>
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Stop & Settle on Solana (1 Final Transaction)</span>
+                          <Sparkles className="w-4 h-4 text-slate-500" />
+                          <span>Stop & Settle on Solana (Press & hold tap above first)</span>
                         </>
                       )}
                     </button>
