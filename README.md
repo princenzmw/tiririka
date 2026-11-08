@@ -4,6 +4,7 @@
 > Built for the **MLH Solana Hackathon (November 6–8, 2026)**.
 
 [![Demo: Live on Vercel](https://img.shields.io/badge/Demo-Live%20on%20Vercel-000000?logo=vercel&logoColor=white)](https://tiririka.vercel.app)
+[![Demo: Video Walkthrough](https://img.shields.io/badge/YouTube-Video%20Demo-FF0000?logo=youtube&logoColor=white)](https://youtu.be/ncVHReBpwXA)
 [![Network: Solana Devnet](https://img.shields.io/badge/Solana-Devnet-14F195?logo=solana&logoColor=black)](https://explorer.solana.com/?cluster=devnet)
 [![TypeScript: 5.x](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js: 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -11,6 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Live Production App:** [https://tiririka.vercel.app](https://tiririka.vercel.app)  
+**2-Minute Video Walkthrough:** [https://youtu.be/ncVHReBpwXA](https://youtu.be/ncVHReBpwXA)  
 **Public Repository:** [https://github.com/princenzmw/tiririka](https://github.com/princenzmw/tiririka)  
 **Verified Devnet Operator:** [`2wYHsuCApQqVwxKv6Hi8YcueqF8pMVTRrweSAAQ3FVy2`](https://explorer.solana.com/address/2wYHsuCApQqVwxKv6Hi8YcueqF8pMVTRrweSAAQ3FVy2?cluster=devnet)
 
@@ -59,7 +61,16 @@ In Nairobi's informal settlements (Mathare, Kibera, Mukuru), clean water is dist
 
 ---
 
-## 3. Protocol Lifecycle & Operational Architecture
+## 3. Video Demonstration (2 Minutes)
+
+[![Watch Tiririka Video Demo](https://img.youtube.com/vi/ncVHReBpwXA/hqdefault.jpg)](https://youtu.be/ncVHReBpwXA)
+
+> **[▶ Watch the Live Video Walkthrough on YouTube (2:02)](https://youtu.be/ncVHReBpwXA)**  
+> *Narrated by Prince Nzamuwe demonstrating on-chain escrow funding, off-chain Ed25519 voucher streaming, live cellular blackout cutover, 0ms threat lab defense, and single-transaction settlement on Solana Devnet.*
+
+---
+
+## 4. Protocol Lifecycle & Operational Architecture
 
 Tiririka operates across six deterministic phases designed for physical IoT micro-utilities:
 
@@ -72,7 +83,7 @@ Tiririka operates across six deterministic phases designed for physical IoT micr
 
 ---
 
-## 4. Cryptographic Security Architecture
+## 5. Cryptographic Security Architecture
 
 * **Voucher Canonical Message:**  
   `TIRIRIKA_V1:<channelId>:<nonce>:<cumulativeLitres>:<cumulativeLamports>`
@@ -84,7 +95,7 @@ Tiririka operates across six deterministic phases designed for physical IoT micr
 
 ---
 
-## 5. On-Chain Anchor Smart Contract Specification
+## 6. On-Chain Anchor Smart Contract Specification
 
 The project includes a complete Solana Anchor v0.30 smart contract blueprint located under `/contracts/tiririka`:
 
@@ -96,7 +107,7 @@ See [contracts/tiririka/src/lib.rs](contracts/tiririka/src/lib.rs) and [contract
 
 ---
 
-## 6. Live App & Local Development
+## 7. Live App & Local Development
 
 ### Live Production Deployment
 Experience the live protocol instantly without installation:  
@@ -127,7 +138,7 @@ Open [http://localhost:3300](http://localhost:3300) in your browser.
 
 ---
 
-## 7. Hackathon Transparency & Disclosures
+## 8. Hackathon Transparency & Disclosures
 
 * **Event:** MLH Solana Hackathon (November 6–8, 2026).
 * **Builder:** Prince NZAMUWE ([@princenzmw](https://github.com/princenzmw)) — 3rd-year BSc Data Science student, Mastercard Foundation Scholar at USIU-Africa, Nairobi, Kenya.
