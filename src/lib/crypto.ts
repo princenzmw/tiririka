@@ -69,7 +69,7 @@ export function verifyVoucherLocally(
   if (voucher.channelId !== channel.id) {
     return {
       isValid: false,
-      reason: `Channel ID mismatch: expected ${channel.id}, got ${voucher.channelId}`,
+      reason: 'Invalid Channel ID: Voucher was issued for a different payment channel.',
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -80,7 +80,7 @@ export function verifyVoucherLocally(
   if (voucher.customerPublicKey !== channel.customerPublicKey) {
     return {
       isValid: false,
-      reason: 'Voucher public key does not match channel creator',
+      reason: 'Unauthorized Signature: Voucher was not signed by the customer who opened this channel.',
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -91,7 +91,7 @@ export function verifyVoucherLocally(
   if (voucher.nonce <= lastVerifiedNonce) {
     return {
       isValid: false,
-      reason: `Stale or replayed nonce: ${voucher.nonce} <= last seen ${lastVerifiedNonce}`,
+      reason: `Stale Voucher Rejected (Replay Blocked): Voucher #${voucher.nonce} has already been recorded. Current confirmed voucher is #${lastVerifiedNonce}.`,
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -102,7 +102,7 @@ export function verifyVoucherLocally(
   if (voucher.cumulativeLamports < lastVerifiedLamports) {
     return {
       isValid: false,
-      reason: `Payment amount decreased: ${voucher.cumulativeLamports} < ${lastVerifiedLamports}`,
+      reason: `Invalid Payment: Cumulative amount (${voucher.cumulativeLamports} lamports) cannot be lower than previously confirmed amount (${lastVerifiedLamports} lamports).`,
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -113,7 +113,7 @@ export function verifyVoucherLocally(
   if (voucher.cumulativeLamports > channel.depositLamports) {
     return {
       isValid: false,
-      reason: `Voucher exceeds channel deposit limit: ${voucher.cumulativeLamports} > ${channel.depositLamports}`,
+      reason: `Deposit Cap Exceeded (Solvency Guard): Claimed ${(voucher.cumulativeLamports / 1e9).toFixed(4)} SOL, which exceeds the customer's ${(channel.depositLamports / 1e9).toFixed(4)} SOL escrow deposit.`,
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -141,7 +141,7 @@ export function verifyVoucherLocally(
     if (!isSignatureValid) {
       return {
         isValid: false,
-        reason: 'Cryptographic Ed25519 signature verification failed',
+        reason: 'Tampered Voucher Blocked: Digital signature does not match payload. Volume or payment data was altered in transit.',
         verifiedLitres: 0,
         verifiedLamports: 0,
         nonce: voucher.nonce,
@@ -157,7 +157,7 @@ export function verifyVoucherLocally(
   } catch (err) {
     return {
       isValid: false,
-      reason: `Signature decoding error: ${err instanceof Error ? err.message : String(err)}`,
+      reason: `Signature Verification Failed: Invalid signature encoding (${err instanceof Error ? err.message : String(err)}).`,
       verifiedLitres: 0,
       verifiedLamports: 0,
       nonce: voucher.nonce,
@@ -222,23 +222,38 @@ export function simulateSolvencyAttack(
  */
 export function simulateTamperingAttack(
   channel: PaymentChannel,
-  currentVoucher: WaterVoucher
+  currentVoucher: WaterVoucher,
+  currentNonce: number = currentVoucher.nonce
 ): { rejected: boolean; attackType: string; error: string; executionMs: number } {
   const start = performance.now();
-  // Modify cumulative lamports without re-signing
+  // Ensure the tampered voucher passes nonce & solvency checks so that it strictly
+  // tests the Ed25519 digital signature guard against payload alteration.
+  const targetNonce = Math.max(currentNonce, currentVoucher.nonce) + 1;
+  const solventLamports = Math.min(
+    channel.depositLamports - 1000,
+    Math.max(currentVoucher.cumulativeLamports + 642, 642)
+  );
+
   const tamperedVoucher: WaterVoucher = {
     ...currentVoucher,
-    nonce: currentVoucher.nonce + 1,
-    cumulativeLamports: currentVoucher.cumulativeLamports + 50000,
+    nonce: targetNonce,
+    cumulativeLitres: Number((currentVoucher.cumulativeLitres + 0.1).toFixed(2)),
+    cumulativeLamports: solventLamports,
+    // Original signature is now invalid because nonce, litres, and lamports changed
   };
 
-  const result = verifyVoucherLocally(tamperedVoucher, channel, currentVoucher.nonce, currentVoucher.cumulativeLamports);
+  const result = verifyVoucherLocally(
+    tamperedVoucher,
+    channel,
+    currentNonce,
+    currentVoucher.cumulativeLamports
+  );
   const executionMs = Number((performance.now() - start).toFixed(2));
 
   return {
     rejected: !result.isValid,
     attackType: 'Payload Signature Tampering',
-    error: result.reason || 'Signature invalid for altered pre-image',
+    error: result.reason || 'Tampering rejected: Ed25519 signature mismatch.',
     executionMs,
   };
 }

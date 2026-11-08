@@ -32,9 +32,9 @@ export default function JudgeTourBanner({
             <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
           </div>
           <div>
-            <span className="font-extrabold text-white">Judge 60-Second Walkthrough:</span>{' '}
+            <span className="font-extrabold text-white">Interactive Protocol Lifecycle:</span>{' '}
             <span className="text-slate-300 hidden sm:inline">
-              Follow the 5-step lifecycle below to evaluate Tiririka in under 1 minute.
+              Follow the 5-step operational lifecycle to verify Tiririka in under 1 minute.
             </span>
           </div>
         </div>
@@ -71,16 +71,16 @@ export default function JudgeTourBanner({
             onClick={onAutoDemo}
             disabled={isAutoDemoRunning}
             className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm shadow-cyan-500/30 disabled:opacity-50"
-            title="Automatically run the entire 5-step demo walkthrough"
+            title="Automatically run the entire 5-step protocol walkthrough"
           >
             <Play className="w-3 h-3 fill-current" />
-            <span>{isAutoDemoRunning ? 'Running Tour...' : 'Auto-Run Demo'}</span>
+            <span>{isAutoDemoRunning ? 'Running Walkthrough...' : 'Autonomous Walkthrough'}</span>
           </button>
           <button
             type="button"
             onClick={onDismiss}
             className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-            aria-label="Dismiss Judge Tour Banner"
+            aria-label="Dismiss Walkthrough Banner"
           >
             <X className="w-4 h-4" />
           </button>

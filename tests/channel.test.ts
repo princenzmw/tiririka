@@ -73,7 +73,7 @@ describe('Tiririka Payment Channel Security & Cryptography', () => {
 
     const result = verifyVoucherLocally(tamperedVoucher, mockChannel, 1, 642);
     assert.strictEqual(result.isValid, false);
-    assert.match(result.reason || '', /signature verification failed/i);
+    assert.match(result.reason || '', /Tampered Voucher Blocked|Digital signature/i);
   });
 
   it('rejects replayed or stale nonces (Replay Attack Defense)', () => {
@@ -89,7 +89,7 @@ describe('Tiririka Payment Channel Security & Cryptography', () => {
     // Kiosk has already seen up to nonce 5
     const result = verifyVoucherLocally(voucher, mockChannel, 5, 3210);
     assert.strictEqual(result.isValid, false);
-    assert.match(result.reason || '', /stale or replayed nonce/i);
+    assert.match(result.reason || '', /Stale Voucher Rejected|Replay Blocked/i);
   });
 
   it('rejects vouchers that exceed the channel deposit ceiling (Solvency Guard)', () => {
@@ -105,7 +105,7 @@ describe('Tiririka Payment Channel Security & Cryptography', () => {
 
     const result = verifyVoucherLocally(voucher, mockChannel, 9, 500000);
     assert.strictEqual(result.isValid, false);
-    assert.match(result.reason || '', /exceeds channel deposit limit/i);
+    assert.match(result.reason || '', /Deposit Cap Exceeded|Solvency Guard/i);
   });
 
   it('verifies 100 consecutive vouchers in memory at high throughput (Offline Kiosk Speed)', () => {
@@ -176,16 +176,16 @@ describe('Tiririka Payment Channel Security & Cryptography', () => {
     // 1. Replay attack
     const replay = simulateReplayAttack(mockChannel, voucher, 15);
     assert.strictEqual(replay.rejected, true);
-    assert.match(replay.error, /stale or replayed/i);
+    assert.match(replay.error, /Stale Voucher Rejected|Replay Blocked/i);
 
     // 2. Solvency attack
     const solvency = simulateSolvencyAttack(mockChannel, voucher);
     assert.strictEqual(solvency.rejected, true);
-    assert.match(solvency.error, /exceeds channel deposit limit/i);
+    assert.match(solvency.error, /Deposit Cap Exceeded|Solvency Guard/i);
 
     // 3. Tampering attack
     const tampering = simulateTamperingAttack(mockChannel, voucher);
     assert.strictEqual(tampering.rejected, true);
-    assert.match(tampering.error, /signature verification failed/i);
+    assert.match(tampering.error, /Tampered Voucher Blocked|Digital signature/i);
   });
 });

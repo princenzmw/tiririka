@@ -62,23 +62,24 @@ export default function SecurityLab({
   const handleRunSimulation = () => {
     if (!channel) return;
 
+    const activeNonce = Math.max(1, voucherCount);
     const baseVoucher = lastVoucher || {
       channelId: channel.id,
-      nonce: Math.max(1, voucherCount),
-      cumulativeLitres: 1.0,
-      cumulativeLamports: 6420,
+      nonce: activeNonce,
+      cumulativeLitres: Number((activeNonce * 0.1).toFixed(1)),
+      cumulativeLamports: activeNonce * 642,
       timestamp: Date.now(),
-      signature: 'dummySigForAttackLab11111111111111111111111111111111111',
+      signature: '3hG9dummyAttackLabSig1111111111111111111111111111111111111111111111111111111111',
       customerPublicKey: channel.customerPublicKey,
     };
 
     let result;
     if (selectedAttack === 'replay') {
-      result = simulateReplayAttack(channel, baseVoucher, Math.max(2, voucherCount));
+      result = simulateReplayAttack(channel, baseVoucher, activeNonce);
     } else if (selectedAttack === 'solvency') {
       result = simulateSolvencyAttack(channel, baseVoucher);
     } else {
-      result = simulateTamperingAttack(channel, baseVoucher);
+      result = simulateTamperingAttack(channel, baseVoucher, activeNonce);
     }
 
     setLastAttackResult(result);
@@ -133,17 +134,19 @@ export default function SecurityLab({
       </div>
 
       {/* Attack Scenario Explanation */}
-      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+      <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 text-xs space-y-2">
         <div className="font-bold text-white flex items-center justify-between">
-          <span>{currentAttackInfo.title}</span>
-          <span className="text-[10px] text-cyan-400 font-mono">Simulated Vector</span>
+          <span className="text-rose-200">{currentAttackInfo.title}</span>
+          <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/60">
+            Threat Vector
+          </span>
         </div>
         <p className="text-slate-300 text-[11px] leading-relaxed">
           {currentAttackInfo.description}
         </p>
-        <div className="flex items-start gap-1.5 text-[10px] text-emerald-400 font-mono bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+        <div className="flex items-start gap-1.5 text-[10px] text-emerald-400 font-mono bg-slate-950/80 p-2.5 rounded-lg border border-slate-800">
           <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-400" />
-          <span>Mathematical Guard: {currentAttackInfo.guard}</span>
+          <span>Security Rule: {currentAttackInfo.guard}</span>
         </div>
       </div>
 
@@ -155,24 +158,28 @@ export default function SecurityLab({
         className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-rose-950/70 border border-rose-700 hover:bg-rose-900 text-rose-200 transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 shadow-md shadow-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Play className="w-3.5 h-3.5 fill-current" />
-        <span>Launch {currentAttackInfo.title} (Proof of Defense)</span>
+        <span>Test Threat Defense: {currentAttackInfo.title}</span>
       </button>
 
       {/* Attack Result Proof Toast */}
       {lastAttackResult && (
-        <div className="p-3 bg-rose-950/90 border border-rose-500 rounded-xl space-y-1 text-xs text-rose-200 animate-in fade-in duration-200">
+        <div className="p-3.5 bg-rose-950/90 border border-rose-500 rounded-xl space-y-1.5 text-xs text-rose-200 animate-in fade-in duration-200">
           <div className="flex items-center justify-between font-bold text-rose-300 text-[11px]">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              DEFENSE VERIFIED IN {lastAttackResult.executionMs} ms
+            <span className="flex items-center gap-1.5 text-emerald-300 font-extrabold">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ATTACK BLOCKED & PROTECTED ({lastAttackResult.executionMs} ms)
             </span>
             <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-rose-300 font-mono">
-              HTTP/RPC Calls: 0
+              0 Network Latency
             </span>
           </div>
-          <p className="text-[11px] text-rose-100 font-mono pt-0.5">
+          <p className="text-[11px] text-rose-100 leading-relaxed font-sans pt-0.5">
             {lastAttackResult.error}
           </p>
+          <div className="text-[10px] text-slate-400 pt-1 border-t border-rose-900/60 font-mono flex items-center justify-between">
+            <span>Kiosk Hardware Action: Flow valve remained closed</span>
+            <span className="text-emerald-400 font-bold">100% Funds Secure</span>
+          </div>
         </div>
       )}
     </div>

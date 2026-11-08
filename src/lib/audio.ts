@@ -8,6 +8,7 @@ class AudioSynthesizer {
   private waterNoiseNode: AudioNode | null = null;
   private waterGainNode: GainNode | null = null;
   private isWaterSoundPlaying = false;
+  private cachedNoiseBuffer: AudioBuffer | null = null;
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -60,19 +61,21 @@ class AudioSynthesizer {
     if (!ctx) return;
 
     try {
-      const bufferSize = ctx.sampleRate * 2;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      let lastOut = 0.0;
-      for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        // Pink noise filter approximation
-        lastOut = (lastOut + 0.02 * white) / 1.02;
-        data[i] = lastOut * 3.5;
+      if (!this.cachedNoiseBuffer) {
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let lastOut = 0.0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          lastOut = (lastOut + 0.02 * white) / 1.02;
+          data[i] = lastOut * 3.5;
+        }
+        this.cachedNoiseBuffer = buffer;
       }
 
       const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
+      noise.buffer = this.cachedNoiseBuffer;
       noise.loop = true;
 
       // Bandpass filter to sound like gentle pouring water

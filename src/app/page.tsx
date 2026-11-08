@@ -94,13 +94,14 @@ export default function TiririkaKioskApp() {
   // Dispense interval timer ref
   const dispenseIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Synchronous State Refs to guarantee Async/Auto-Demo immunity against stale React closures
+  // Synchronous State Refs to guarantee Async & Interval immunity against stale React closures
   const channelRef = useRef<PaymentChannel | null>(channel);
   const lastVoucherRef = useRef<WaterVoucher | null>(lastVoucher);
   const voucherCountRef = useRef<number>(voucherCount);
   const verifiedLamportsRef = useRef<number>(verifiedLamports);
   const customerKeypairRef = useRef<Keypair | null>(customerKeypair);
   const channelEscrowKeypairRef = useRef<Keypair | null>(channelEscrowKeypair);
+  const litresDispensedRef = useRef<number>(litresDispensed);
 
   useEffect(() => { channelRef.current = channel; }, [channel]);
   useEffect(() => { lastVoucherRef.current = lastVoucher; }, [lastVoucher]);
@@ -108,6 +109,7 @@ export default function TiririkaKioskApp() {
   useEffect(() => { verifiedLamportsRef.current = verifiedLamports; }, [verifiedLamports]);
   useEffect(() => { customerKeypairRef.current = customerKeypair; }, [customerKeypair]);
   useEffect(() => { channelEscrowKeypairRef.current = channelEscrowKeypair; }, [channelEscrowKeypair]);
+  useEffect(() => { litresDispensedRef.current = litresDispensed; }, [litresDispensed]);
 
   // Update balances from Devnet
   const refreshBalances = useCallback(async () => {
@@ -216,51 +218,67 @@ export default function TiririkaKioskApp() {
     }
   };
 
-  // Tick Dispenser: increment 0.1L and generate signed voucher
+  // Tick Dispenser: continuous 10Hz live update
   const tickDispenser = useCallback(() => {
-    if (!channel || !customerKeypair || channel.status !== 'OPEN') return;
+    const activeChannel = channelRef.current || channel;
+    const activeCustomer = customerKeypairRef.current || customerKeypair;
+    if (!activeChannel || !activeCustomer || activeChannel.status !== 'OPEN') return;
 
-    setLitresDispensed((prevLitres) => {
-      const nextLitres = Number((prevLitres + TIRIRIKA_CONFIG.LITRES_PER_TICK).toFixed(2));
-      const nextNonce = Math.round(nextLitres / TIRIRIKA_CONFIG.LITRES_PER_TICK);
-      const nextLamports = nextNonce * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK;
+    const currentLitres = litresDispensedRef.current;
+    if (currentLitres >= 20.0) {
+      setIsFlowing(false);
+      audioSynth.stopWaterFlow();
+      return;
+    }
 
-      // Solvency check against locked escrow deposit
-      if (nextLamports > channel.depositLamports) {
-        setIsFlowing(false);
-        audioSynth.stopWaterFlow();
-        return prevLitres;
+    const nextLitres = Number(Math.min(20.0, currentLitres + TIRIRIKA_CONFIG.LITRES_PER_TICK).toFixed(2));
+    const nextNonce = Math.round(nextLitres / TIRIRIKA_CONFIG.LITRES_PER_TICK);
+    const nextLamports = nextNonce * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK;
+
+    // Solvency check against locked escrow deposit
+    if (nextLamports > activeChannel.depositLamports) {
+      setIsFlowing(false);
+      audioSynth.stopWaterFlow();
+      return;
+    }
+
+    // 1. Customer signs voucher off-chain
+    const voucher = signWaterVoucher(
+      activeChannel.id,
+      nextNonce,
+      nextLitres,
+      nextLamports,
+      activeCustomer.secretKey,
+      activeCustomer.publicKey.toBase58()
+    );
+
+    // 2. Kiosk verifies voucher locally in memory
+    const verification = verifyVoucherLocally(
+      voucher,
+      activeChannel,
+      voucherCountRef.current,
+      verifiedLamportsRef.current
+    );
+
+    if (verification.isValid) {
+      litresDispensedRef.current = nextLitres;
+      setLitresDispensed(nextLitres);
+      setLastVoucher(voucher);
+      lastVoucherRef.current = voucher;
+      setVoucherCount(nextNonce);
+      voucherCountRef.current = nextNonce;
+      setVerifiedLamports(nextLamports);
+      verifiedLamportsRef.current = nextLamports;
+
+      if (soundEnabled && nextNonce % 3 === 0) {
+        audioSynth.playVoucherTick(soundEnabled);
       }
+    }
 
-      // 1. Customer signs voucher off-chain
-      const voucher = signWaterVoucher(
-        channel.id,
-        nextNonce,
-        nextLitres,
-        nextLamports,
-        customerKeypair.secretKey,
-        customerKeypair.publicKey.toBase58()
-      );
-
-      // 2. Kiosk verifies voucher locally in memory
-      const verification = verifyVoucherLocally(
-        voucher,
-        channel,
-        nextNonce - 1,
-        (nextNonce - 1) * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK
-      );
-
-      if (verification.isValid) {
-        setLastVoucher(voucher);
-        setVoucherCount(nextNonce);
-        setVerifiedLamports(nextLamports);
-        if (soundEnabled && nextNonce % 3 === 0) {
-          audioSynth.playVoucherTick(soundEnabled);
-        }
-      }
-
-      return nextLitres;
-    });
+    if (nextLitres >= 20.0) {
+      setIsFlowing(false);
+      audioSynth.stopWaterFlow();
+    }
   }, [channel, customerKeypair, soundEnabled]);
 
   // Dispenser interval management & audio flow synchronization
@@ -283,49 +301,52 @@ export default function TiririkaKioskApp() {
     };
   }, [isFlowing, channel?.status, tickDispenser, soundEnabled]);
 
-  // Quick Preset Fillers (+1L, +5L, +20L)
+  // Quick Preset Fillers (+1L, +5L, +20L) strictly capped at 20L
   const addPresetLitres = (additionalLitres: number) => {
     const activeChannel = channelRef.current || channel;
     const activeCustomer = customerKeypairRef.current || customerKeypair;
     if (!activeChannel || !activeCustomer || activeChannel.status !== 'OPEN') return;
 
-    setLitresDispensed((prevLitres) => {
-      const nextLitres = Number((prevLitres + additionalLitres).toFixed(2));
-      const nextNonce = Math.round(nextLitres / TIRIRIKA_CONFIG.LITRES_PER_TICK);
-      const nextLamports = nextNonce * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK;
+    const currentLitres = litresDispensedRef.current;
+    if (currentLitres >= 20.0) return; // Jerrycan already full
 
-      if (nextLamports > activeChannel.depositLamports) {
-        return prevLitres;
-      }
+    const nextLitres = Number(Math.min(20.0, currentLitres + additionalLitres).toFixed(2));
+    if (nextLitres === currentLitres) return;
 
-      const voucher = signWaterVoucher(
-        activeChannel.id,
-        nextNonce,
-        nextLitres,
-        nextLamports,
-        activeCustomer.secretKey,
-        activeCustomer.publicKey.toBase58()
-      );
+    const nextNonce = Math.round(nextLitres / TIRIRIKA_CONFIG.LITRES_PER_TICK);
+    const nextLamports = nextNonce * TIRIRIKA_CONFIG.LAMPORTS_PER_TICK;
 
-      const verification = verifyVoucherLocally(
-        voucher,
-        activeChannel,
-        voucherCountRef.current,
-        verifiedLamportsRef.current
-      );
+    if (nextLamports > activeChannel.depositLamports) {
+      return;
+    }
 
-      if (verification.isValid) {
-        setLastVoucher(voucher);
-        lastVoucherRef.current = voucher;
-        setVoucherCount(nextNonce);
-        voucherCountRef.current = nextNonce;
-        setVerifiedLamports(nextLamports);
-        verifiedLamportsRef.current = nextLamports;
-        audioSynth.playVoucherTick(soundEnabled);
-      }
+    const voucher = signWaterVoucher(
+      activeChannel.id,
+      nextNonce,
+      nextLitres,
+      nextLamports,
+      activeCustomer.secretKey,
+      activeCustomer.publicKey.toBase58()
+    );
 
-      return nextLitres;
-    });
+    const verification = verifyVoucherLocally(
+      voucher,
+      activeChannel,
+      voucherCountRef.current,
+      verifiedLamportsRef.current
+    );
+
+    if (verification.isValid) {
+      litresDispensedRef.current = nextLitres;
+      setLitresDispensed(nextLitres);
+      setLastVoucher(voucher);
+      lastVoucherRef.current = voucher;
+      setVoucherCount(nextNonce);
+      voucherCountRef.current = nextNonce;
+      setVerifiedLamports(nextLamports);
+      verifiedLamportsRef.current = nextLamports;
+      audioSynth.playVoucherTick(soundEnabled);
+    }
   };
 
   // Settle Channel on Solana Devnet
@@ -468,18 +489,25 @@ export default function TiririkaKioskApp() {
     }
   };
 
-  // Reset demo session
+  // Reset and prepare for new customer session
   const handleReset = () => {
     setIsFlowing(false);
     audioSynth.stopWaterFlow();
     setChannel(null);
+    channelRef.current = null;
     setLitresDispensed(0);
+    litresDispensedRef.current = 0;
     setVoucherCount(0);
+    voucherCountRef.current = 0;
     setLastVoucher(null);
+    lastVoucherRef.current = null;
     setVerifiedLamports(0);
+    verifiedLamportsRef.current = 0;
     setSettlementResult(null);
     setSecurityAlert(null);
     setSelectedVoucherForInspect(null);
+    setIsKioskOnline(true);
+    setCustomerKeypair(generateDemoKeypair());
     setChannelEscrowKeypair(generateDemoKeypair());
   };
 
@@ -593,13 +621,13 @@ export default function TiririkaKioskApp() {
               <span>{isAirdropping ? 'Airdropping...' : 'Faucet 0.05 SOL'}</span>
             </button>
 
-            {/* Reset Button */}
+            {/* Start New Session Button */}
             <button
               type="button"
               onClick={handleReset}
               className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
-              aria-label="Reset Demo Session"
-              title="Reset Demo Session"
+              aria-label="Start New Kiosk Session"
+              title="Start New Kiosk Session"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -739,16 +767,51 @@ export default function TiririkaKioskApp() {
               /* Step 2: Interactive Dispenser Controls (When Channel is Open or Settled) */
               <div className="space-y-5">
                 {/* Channel Active Status Banner */}
-                <div className="flex items-center justify-between p-3.5 bg-cyan-950/50 border border-cyan-800/80 rounded-2xl text-xs font-mono">
-                  <div className="flex items-center gap-2 text-cyan-300">
-                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-                    <span className="font-semibold">Channel #{channel.id.slice(0, 8)}...</span>
+                <div className={`flex items-center justify-between p-3.5 rounded-2xl text-xs font-mono border ${
+                  channel.status === 'SETTLED'
+                    ? 'bg-emerald-950/60 border-emerald-700/80 text-emerald-300'
+                    : 'bg-cyan-950/50 border-cyan-800/80 text-cyan-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-semibold">
+                      {channel.status === 'SETTLED' ? 'Channel Escrow Closed & Settled' : `Channel #${channel.id.slice(0, 8)}...`}
+                    </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-slate-400 text-[10px] block">Escrow Cap</span>
-                    <span className="text-white font-bold">{(channel.depositLamports / 1e9).toFixed(3)} SOL</span>
+                    <span className="text-slate-400 text-[10px] block">
+                      {channel.status === 'SETTLED' ? 'Status' : 'Escrow Cap'}
+                    </span>
+                    <span className="text-white font-bold">
+                      {channel.status === 'SETTLED' ? 'COMPLETED' : `${(channel.depositLamports / 1e9).toFixed(3)} SOL`}
+                    </span>
                   </div>
                 </div>
+
+                {/* Completed Session Card with Instant Action to Start Next Session */}
+                {channel.status === 'SETTLED' && (
+                  <div className="p-6 bg-gradient-to-b from-emerald-950/90 via-slate-900 to-slate-950 border-2 border-emerald-500/60 rounded-2xl text-center space-y-4 shadow-2xl shadow-emerald-950/50 animate-in fade-in duration-300">
+                    <div className="w-14 h-14 bg-emerald-500/20 border-2 border-emerald-400 rounded-full flex items-center justify-center mx-auto text-emerald-300 shadow-inner">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-white">Water Transaction Settled On-Chain</h3>
+                      <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto leading-relaxed">
+                        The channel escrow has closed on Solana Devnet. The kiosk operator has received their earnings and your remaining deposit was refunded.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="w-full py-4 px-6 rounded-xl font-extrabold text-sm bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 shadow-xl shadow-cyan-500/30 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                      aria-label="Start next water fill customer session"
+                    >
+                      <RotateCcw className="w-4 h-4 text-slate-950" />
+                      <span>Start Next Water Fill (New Customer Session)</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Big Interactive Tap Dispenser Station */}
                 {channel.status === 'OPEN' && (
@@ -758,47 +821,58 @@ export default function TiririkaKioskApp() {
                       Water Dispenser Control
                     </div>
 
-                    {/* Dual-Mode Dispenser Button (Click to Toggle OR Hold) */}
+                    {/* Responsive Click-to-Toggle Dispenser Button */}
                     <button
                       type="button"
-                      onClick={() => setIsFlowing(!isFlowing)}
-                      onMouseDown={() => setIsFlowing(true)}
-                      onMouseUp={() => setIsFlowing(false)}
-                      onTouchStart={() => setIsFlowing(true)}
-                      onTouchEnd={() => setIsFlowing(false)}
-                      className={`relative w-48 h-48 rounded-full flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer shadow-2xl select-none active:scale-95 ${
+                      onClick={() => {
+                        if (litresDispensed >= 20.0) return;
+                        setIsFlowing((prev) => !prev);
+                      }}
+                      disabled={litresDispensed >= 20.0}
+                      className={`relative w-48 h-48 rounded-full flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer shadow-2xl select-none active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
                         isFlowing
-                          ? 'bg-gradient-to-tr from-cyan-500 to-blue-500 text-white ring-4 ring-cyan-300/60 shadow-cyan-500/60 glow-cyan'
+                          ? 'bg-gradient-to-tr from-cyan-500 to-blue-500 text-white ring-4 ring-cyan-300/60 shadow-cyan-500/60 glow-cyan animate-pulse'
+                          : litresDispensed >= 20.0
+                          ? 'bg-emerald-950/50 border-2 border-emerald-500/60 text-emerald-300 shadow-emerald-950/40'
                           : 'bg-gradient-to-b from-slate-800 via-slate-850 to-slate-900 border-2 border-cyan-500/50 text-slate-200 hover:border-cyan-300 hover:scale-105 hover:shadow-cyan-950/60'
                       }`}
-                      aria-label="Tap Dispenser: Click to toggle water flow or hold down"
+                      aria-label="Tap Dispenser: Click to toggle water flow"
                     >
                       {isFlowing ? (
                         <>
                           <Droplets className="w-14 h-14 animate-bounce text-white mb-1.5" />
                           <span className="text-sm font-extrabold tracking-wider uppercase">WATER FLOWING</span>
-                          <span className="text-[11px] text-cyan-100 font-mono mt-1 flex items-center gap-1 bg-black/25 px-2.5 py-0.5 rounded-full">
-                            <Pause className="w-3 h-3" /> Click to Pause
+                          <span className="text-[11px] text-cyan-100 font-mono mt-1 flex items-center gap-1 bg-black/35 px-3 py-1 rounded-full border border-white/20">
+                            <Pause className="w-3.5 h-3.5" /> Click to Pause
+                          </span>
+                        </>
+                      ) : litresDispensed >= 20.0 ? (
+                        <>
+                          <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-1.5" />
+                          <span className="text-sm font-extrabold tracking-wider uppercase text-emerald-300">JERRYCAN FULL</span>
+                          <span className="text-[11px] text-emerald-200 font-mono mt-1 bg-emerald-950/90 px-3 py-0.5 rounded-full border border-emerald-700">
+                            20.0 / 20.0 Litres
                           </span>
                         </>
                       ) : (
                         <>
                           <Droplets className="w-12 h-12 text-cyan-400 mb-1.5 group-hover:scale-110 transition-transform" />
                           <span className="text-sm font-extrabold tracking-wider uppercase text-white">TAP TO FLOW</span>
-                          <span className="text-[11px] text-cyan-300 font-mono mt-1 flex items-center gap-1 bg-cyan-950/80 px-2.5 py-0.5 rounded-full border border-cyan-800">
-                            <Play className="w-3 h-3 text-cyan-400" /> Click or Hold
+                          <span className="text-[11px] text-cyan-300 font-mono mt-1 flex items-center gap-1 bg-cyan-950/80 px-3 py-1 rounded-full border border-cyan-800">
+                            <Play className="w-3.5 h-3.5 text-cyan-400" /> Click to Start Flow
                           </span>
                         </>
                       )}
                     </button>
 
-                    {/* Fast Presets: Fill 1L, 5L, 20L */}
+                    {/* Fast Presets: Fill 1L, 5L, 20L (Capped at 20L Jerrycan) */}
                     <div className="mt-5 w-full flex items-center justify-center gap-2">
                       <span className="text-[11px] text-slate-400 font-mono">Quick Fill:</span>
                       <button
                         type="button"
                         onClick={() => addPresetLitres(1.0)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-cyan-300 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-sm"
+                        disabled={litresDispensed >= 20.0}
+                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-cyan-300 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Sign vouchers for 1 Litre (KES 0.15)"
                         aria-label="Dispense 1 Litre preset"
                       >
@@ -807,7 +881,8 @@ export default function TiririkaKioskApp() {
                       <button
                         type="button"
                         onClick={() => addPresetLitres(5.0)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-cyan-300 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-sm"
+                        disabled={litresDispensed >= 20.0}
+                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-cyan-300 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Sign vouchers for 5 Litres (KES 0.75)"
                         aria-label="Dispense 5 Litres preset"
                       >
@@ -816,7 +891,8 @@ export default function TiririkaKioskApp() {
                       <button
                         type="button"
                         onClick={() => addPresetLitres(20.0)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-cyan-950 hover:bg-cyan-900 border border-cyan-600 text-cyan-200 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-md shadow-cyan-950"
+                        disabled={litresDispensed >= 20.0}
+                        className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-cyan-950 hover:bg-cyan-900 border border-cyan-600 text-cyan-200 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1 shadow-md shadow-cyan-950 disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Fill full 20L Jerrycan (KES 3.00)"
                         aria-label="Dispense 20 Litres full jerrycan preset"
                       >
@@ -825,7 +901,7 @@ export default function TiririkaKioskApp() {
                     </div>
 
                     <p className="text-[11px] text-slate-400 mt-3 text-center">
-                      Click the circle to start/pause, hold it down, or use the quick fill presets.
+                      Click the circle to start or pause live flow, or use the quick fill presets.
                     </p>
                   </div>
                 )}
@@ -1104,7 +1180,7 @@ export default function TiririkaKioskApp() {
                   aria-label="Verify settlement on Solana Explorer"
                 >
                   <span>
-                    {settlementResult.settlementTxSignature.startsWith('5SettledDevnet')
+                    {settlementResult.settlementTxSignature.startsWith('5SettledDevnet') || settlementResult.settlementTxSignature.startsWith('5DevnetSettlement')
                       ? 'Verify Operator Settlement Account on Solana Explorer'
                       : 'Verify Settlement Transaction on Solana Explorer'}
                   </span>
