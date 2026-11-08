@@ -58,10 +58,10 @@ In Nairobi's informal settlements (Mathare, Kibera, Mukuru), clean water is dist
 
 1. **The Hook (0:00 - 0:15):** In Nairobi, 20L costs KES 3. Per-litre payments on any blockchain would burn 100% of the cost in transaction fees. Tiririka proves how payment channels solve this for physical infrastructure.
 2. **Open Channel (0:15 - 0:35):** Customer connects demo wallet, selects a 0.01 SOL deposit cap, and confirms on Solana Devnet (1 on-chain transaction).
-3. **The Fluid Stream (0:35 - 0:55):** Hold the tap button: water flows, jerrycan fills, vouchers stream every 0.1L, on-chain transaction count stays strictly at **1**.
-4. **The Internet Cut (0:55 - 1:15):** Toggle the kiosk offline. Amber badge activates: water keeps flowing! The kiosk verifies Ed25519 signatures locally without an RPC connection.
-5. **Anti-Cheat Defense (1:15 - 1:35):** Click "Test Operator Over-Claim Attack". The operator attempts to settle the full 0.01 SOL deposit without customer vouchers. The smart logic rejects the attempt immediately.
-6. **Stop & Settle (1:35 - 2:00):** Settle at 13.7L. One final on-chain transaction distributes 87,954 lamports (KES 2.06) to the kiosk operator and refunds 9,912,046 lamports back to the customer. Confetti burst and live Solana Explorer verification link.
+3. **The Fluid Stream (0:35 - 0:55):** Click the tap button or quick fill presets: water flows continuously, the 20L jerrycan fills with live wave animation, vouchers stream every 0.1L, and the on-chain transaction count stays strictly at **1**.
+4. **The Internet Cut (0:55 - 1:15):** Toggle the kiosk offline. Amber badge activates: water keeps flowing across multiple customer sessions! The kiosk verifies Ed25519 signatures locally in under 1ms without an RPC connection.
+5. **Anti-Cheat Defense (1:15 - 1:35):** In the 3-Vector Cryptographic Threat Lab, launch Stale Replay or Payload Tampering attacks. The local verification guard blocks the attack instantly with plain-English proofs.
+6. **Stop & Settle (1:35 - 2:00):** Settle on Solana. One final on-chain transaction distributes earned lamports to the kiosk operator and refunds unspent deposit back to the customer. Immediate Solana Explorer verification link and option to start the next customer fill.
 
 ---
 
@@ -116,7 +116,7 @@ Open [http://localhost:3300](http://localhost:3300) in your browser.
 
 ---
 
-## 6. Hackathon Transparency & Disclosures
+## 7. Hackathon Transparency & Disclosures
 
 * **Event:** MLH Solana Hackathon (November 6–8, 2026).
 * **Builder:** Prince NZAMUWE ([@princenzmw](https://github.com/princenzmw)) — 3rd-year BSc Data Science student, Mastercard Foundation Scholar at USIU-Africa, Nairobi, Kenya.
